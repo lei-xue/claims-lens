@@ -3,18 +3,18 @@
   --panel: #ffffff;
   --ink: #14121f;
   --ink-2: #3d3a4f;
-  --muted: #6e6a85;
+  --muted: #5d5975;
   --line: #e7e5f0;
   --line-2: #d6d3e4;
   --violet: #5b3df5;
   --violet-2: #7c66ff;
   --violet-50: #f1eeff;
   --violet-100: #e2dcff;
-  --paid: #0b8a5c;
+  --paid: #07734c;
   --paid-50: #e6f6ef;
-  --deny: #d6336c;
+  --deny: #b8255a;
   --deny-50: #fdecf2;
-  --warn: #b26a00;
+  --warn: #8f5400;
   --warn-50: #fff4e0;
   --code: #f3f2f8;
   --mono: 'Geist Mono', ui-monospace, monospace;
@@ -60,7 +60,12 @@ p { margin: 0; }
 .mono { font-family: var(--mono); }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
-.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+/* visible keyboard focus everywhere */
+:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 760px) { .code-chip { min-height: 40px; } .btn { min-height: 44px; } .logo { min-height: 44px; } }
 
 /* top nav */
 .top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
@@ -123,7 +128,7 @@ textarea.edi:focus, input:focus, select:focus { outline: 2px solid var(--violet-
 .pill.violet { background: var(--violet-50); color: var(--violet); }
 .code-chip {
   display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 8px; border-radius: 7px; border: 1px solid var(--line-2);
-  background: var(--panel); cursor: pointer; font-size: 12.5px; text-align: left;
+  background: var(--panel); cursor: pointer; font-size: 13px; text-align: left; min-height: 32px; align-items: center;
 }
 .hbar .code-chip { width: 100%; white-space: nowrap; overflow: hidden; }
 .code-chip:hover { border-color: var(--violet); }

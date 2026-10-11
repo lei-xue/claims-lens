@@ -166,7 +166,7 @@ function Trend({ values, labels }: { values: number[]; labels: string[] }) {
       {[0, 0.5, 1].map((f) => (
         <g key={f}>
           <line x1={30} x2={w - 20} y1={y(max * f / 1.15)} y2={y(max * f / 1.15)} stroke="var(--line)" />
-          <text x={0} y={y(max * f / 1.15) + 4} fontSize="10" fill="var(--muted)">{Math.round((100 * max * f) / 1.15)}%</text>
+          <text x={0} y={y(max * f / 1.15) + 4} fontSize="12" fill="var(--muted)">{Math.round((100 * max * f) / 1.15)}%</text>
         </g>
       ))}
       <path d={path} fill="none" stroke="var(--violet)" strokeWidth="2.5" strokeLinejoin="round" />
@@ -175,7 +175,7 @@ function Trend({ values, labels }: { values: number[]; labels: string[] }) {
           <circle cx={x(i)} cy={y(v)} r="3.5" fill="var(--panel)" stroke="var(--violet)" strokeWidth="2">
             <title>{`${labels[i]}: ${(100 * v).toFixed(1)}%`}</title>
           </circle>
-          <text x={x(i)} y={h - 6} fontSize="10" textAnchor="middle" fill="var(--muted)">{labels[i]}</text>
+          <text x={x(i)} y={h - 6} fontSize="12" textAnchor="middle" fill="var(--muted)">{labels[i]}</text>
         </g>
       ))}
     </svg>
