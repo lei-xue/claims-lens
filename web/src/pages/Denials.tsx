@@ -51,7 +51,7 @@ export default function Denials() {
     return cs.length ? d / cs.length : 0
   })
 
-  const worklist = [...group(denials, (d) => d.claim.id)].map(([, ds]) => ({ claim: ds[0].claim, amt: ds.reduce((a, d) => a + d.amount, 0), reasons: [...new Set(ds.map((d) => `${d.group}-${d.reason}`))] })).sort((a, b) => b.claim.paidDate.localeCompare(a.claim.paidDate) || b.amt - a.amt).slice(0, 15)
+  const worklist = [...group(denials, (d) => d.claim.id)].map(([, ds]) => ({ claim: ds[0].claim, amt: ds.reduce((a, d) => a + d.amount, 0), reasons: [...new Set(ds.map((d) => `${d.group}-${d.reason}`))] })).sort((a, b) => b.claim.serviceDate.localeCompare(a.claim.serviceDate) || b.amt - a.amt).slice(0, 15)
 
   return (
     <>

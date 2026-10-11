@@ -46,6 +46,9 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+/* never let anything make the page pan sideways on phones */
+html, body { overflow-x: clip; overscroll-behavior-x: none; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: inherit; }
@@ -75,7 +78,15 @@ p { margin: 0; }
 }
 
 .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 24px 80px; }
-@media (max-width: 760px) { .wrap { padding: 20px 16px 64px; } h1 { font-size: 24px; } }
+@media (max-width: 760px) {
+  .wrap { padding: 20px 16px 64px; } h1 { font-size: 24px; }
+  /* iOS zooms into fields under 16px on focus, after which the page slides around */
+  input, select, textarea { font-size: 16px !important; }
+  .hero-drop select { width: 100%; }
+  .kpi b { font-size: 21px; }
+}
+.wrap { min-width: 0; overflow-wrap: anywhere; }
+table.t { overflow-wrap: normal; }
 .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
 .head p { margin-top: 6px; color: var(--muted); max-width: 680px; }
 
@@ -97,7 +108,7 @@ p { margin: 0; }
 .btn.primary { background: var(--violet); border-color: var(--violet); color: #fff; }
 .btn.primary:hover { background: var(--violet-2); }
 .btn.ghost { border-color: transparent; background: none; }
-select { max-width: 100%; }
+select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
 select, input[type='search'] { border: 1px solid var(--line-2); background: var(--panel); border-radius: 9px; padding: 8px 10px; }
 textarea.edi {
   width: 100%; min-height: 190px; resize: vertical; border: 1px solid var(--line-2); border-radius: 12px; padding: 14px;
