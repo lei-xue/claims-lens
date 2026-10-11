@@ -1,22 +1,42 @@
-# Public static hosting for Claims Lens on the shared edge tunnel (see /opt/edge).
-# Site files: /opt/claims-lens/site (built by update.sh). Tunnel hostname → http://claims:80
+# Claims Lens on the shared edge tunnel (see /opt/edge). Tunnel hostname → http://claims:80
+#   cd <repo> && docker compose --env-file /opt/claims-lens/.env.prod -f deploy/docker-compose.yml up -d --build
 name: claims-lens
 
 services:
-  web:
-    image: nginx:1.29-alpine
+  app:
+    build: ../web
     restart: unless-stopped
-    volumes:
-      - /opt/claims-lens/site:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    mem_limit: 64m
+    environment:
+      DATABASE_URL: postgres://claims:${POSTGRES_PASSWORD}@db:5432/claims
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    depends_on:
+      db: { condition: service_healthy }
+    mem_limit: 256m
     networks:
-      edge:
-        aliases: [claims]
-    logging:
-      driver: json-file
-      options: { max-size: 5m, max-file: '2' }
+      edge: { aliases: [claims] }
+      internal: {}
+    logging: { driver: json-file, options: { max-size: 5m, max-file: '2' } }
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: claims
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: claims
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U claims']
+      interval: 5s
+      retries: 20
+    mem_limit: 256m
+    networks: [internal]
+    logging: { driver: json-file, options: { max-size: 5m, max-file: '2' } }
+
+volumes:
+  pgdata:
 
 networks:
-  edge:
-    external: true
+  edge: { external: true }
+  internal: {}

@@ -99,7 +99,7 @@ function RarcBody({ r }: { r: Rarc }) {
   )
 }
 
-export function AdjChip({ group, reason, amount }: { group: string; reason: string; amount?: number }) {
+export function AdjChip({ group, reason, amount, compact }: { group: string; reason: string; amount?: number; compact?: boolean }) {
   const open = useOpenCode()
   const codes = useCodes()
   const c = codes?.carc.get(reason)
@@ -108,8 +108,8 @@ export function AdjChip({ group, reason, amount }: { group: string; reason: stri
       <b>
         {group}-{reason}
       </b>
-      <span>{c?.title ?? 'Adjustment'}</span>
-      {amount !== undefined && <span className="mono muted">{amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>}
+      {!compact && <span>{c?.title ?? 'Adjustment'}</span>}
+      {amount !== undefined && !compact && <span className="mono muted">{amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>}
     </button>
   )
 }

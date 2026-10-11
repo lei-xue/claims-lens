@@ -1,5 +1,5 @@
 {
-  "name": "web",
+  "name": "claims-lens",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,19 +7,36 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:api": "tsx watch server/index.ts",
+    "db:up": "docker compose -f docker-compose.dev.yml up -d",
+    "db:migrate": "tsx server/migrate.ts",
+    "db:seed": "tsx server/seed.ts",
+    "typecheck": "tsc -b && tsc -p tsconfig.server.json",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.17",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "pg": "^8.23.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "dotenv": "^18.0.7",
+    "drizzle-kit": "^0.31.11",
+    "esbuild": "^0.28.2",
     "oxlint": "^1.81.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.3"
   }
 }

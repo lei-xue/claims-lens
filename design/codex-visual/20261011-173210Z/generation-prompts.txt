@@ -1,0 +1,35 @@
+Use case: ui-mockup. Generate ONE finished whole-page desktop web app screenshot as a PNG, exactly 1440x900 pixels (16:10), flat front-on, edge-to-edge UI, no device frame, no perspective, no external captions. Product: Claims Lens, a serious professional denial-management workbench for US physician-practice billers and RCM managers. Dense but readable, genuinely shipped-product polish. All data fictional. Strong visual hierarchy, crisp realistic English text, right-aligned tabular money. Main layout: horizontal app chrome (no navy sidebar); KPI strip; left worklist approximately 850px wide, right selected-claim detail approximately 550px wide. Both panes fully visible within screenshot. At least 8 worklist rows, compact detail that includes ALL sections.
+Exact chrome: Claims Lens; Worklist (active), Remittances, Claims, Analytics, Codes; top right Dana Kim with DK avatar.
+Exact KPI data: Open denials $48,210 with 132 claims; Recovered this month $21,940; Avg days to resolve 11.4; Denial rate 9.8%.
+Worklist heading 'Denial worklist', subtitle '132 claims · Sorted by oldest first'. Filters labelled Payer, Denial category, Owner, Age bucket, Status, all set to All. Table columns: Claim / Patient (stack these in one column), Payer, Denial, Denied $, Age, Owner (initials avatar), Status.
+Use these rows consistently:
+MGFM20260403 / Maya Bennett / Northwind Health Plan / CO-197 Prior authorization / $420.00 / 38d / DK / In progress (selected row).
+MGFM20260404 / Oliver Grant / Summit Mutual PPO / CO-16 Missing info / $185.00 / 46d / JL / New.
+MGFM20260405 / Elena Brooks / Harbor Medicaid Plan / CO-50 Not medically necessary / $310.00 / 42d / AM / Appealed.
+MGFM20260406 / Noah Ellis / Northwind Health Plan / CO-97 Bundled / $96.00 / 31d / DK / Resubmitted.
+MGFM20260407 / Ava Reed / Summit Mutual PPO / CO-27 Coverage ended / $240.00 / 28d / JL / New.
+MGFM20260408 / Liam Carter / Harbor Medicaid Plan / CO-16 Missing info / $165.00 / 22d / AM / In progress.
+MGFM20260409 / Sofia Hayes / Northwind Health Plan / CO-197 Prior authorization / $380.00 / 18d / DK / New.
+MGFM20260410 / Ethan Ross / Summit Mutual PPO / CO-97 Bundled / $84.00 / 12d / JL / Resolved.
+Use discreet denial-code chips, status pills, and aging color with explicit day labels.
+Right panel exact header: 'MGFM20260403', 'Maya Bennett', 'Northwind Health Plan', 'DOS Apr 03, 2026', pill 'In progress'.
+Section '837 vs 835 reconciliation': subtext 'Submitted claim → payer remittance'; columns CPT, Billed, Allowed, Paid, Adj.
+Rows: 99214 | $180.00 | $0.00 | $0.00 | CO-197; 20610-RT | $200.00 | $0.00 | $0.00 | CO-197; J1030 | $40.00 | $0.00 | $0.00 | CO-197.
+Total | $420.00 | $0.00 | $0.00. Small summary '$420.00 denied · $0.00 paid'.
+Section 'CO-197 · Prior authorization'; plain English 'The payer reports missing or invalid prior authorization.' Label 'Likely cause', text 'Authorization number was missing from the submitted claim.' Label 'What to do', text 'Verify authorization for this date of service. Add the valid number and resubmit; appeal if authorization was already on file.'
+Action buttons all present: Assign, Correct & resubmit (primary), Draft appeal, Write off (quiet).
+Section 'Activity': 'May 11 · 835 received'; 'May 11 · Auto-matched to 837'; 'May 12 · Assigned to Dana'; 'May 12 · Note added' with note 'Checking authorization record.'
+Bottom table pagination '1–8 of 132', 'Previous', 'Next'.
+Avoid beige paper with sage and italic serif; navy sidebar with blue clinical console; white/black hard offset shadows with yellow highlighter; amber prescription labels; purple gradients; real logos; real patient information. No giant decorative charts, no marketing hero. Typography intentionally sized for dense desktop app.
+
+01-ledger
+ART DIRECTION: Ledger / precision-first financial workspace. Cool white and pale zinc #F4F5F6, graphite #24282C, restrained vermilion #C64B36 selection and primary action. Compact IBM Plex Sans-like typography, IBM Plex Mono-like IDs and financial figures. Fine horizontal rules, squared corners, 40–48px row rhythm, compact horizontal navigation with red underline. KPI strip one connected accounting ribbon, no floating cards. Strong vertical table column alignment. Right detail panel a tightly organized ledger with ruled mini-table. No heavy shadows. Purposeful high-density financial operations aesthetic.
+
+02-clearspace
+ART DIRECTION: Clearspace / calm editorial workbench. Bright white panels on very pale cool gray #F3F6F7, deep charcoal #263339 text, restrained petrol teal #087F82 primary and selected-row tint, cool coral aging alerts. Humanist sans comparable to Source Sans 3 for UI, larger semibold headings, no serif. More generous padding and 54px rows, soft 8px corners, very subtle shadows. KPI strip four spacious metrics with fine separators. Left worklist readable and airy but all required 8 rows visible. Right panel distinct stacked content sections with generous typographic hierarchy and a calm teal primary button. Professional healthcare revenue workflow without clinical blue aesthetic.
+
+03-nightshift
+ART DIRECTION: Nightshift / dark operations console. Dark neutral charcoal #171B1E background, lifted gunmetal #22282C panels, off-white #E7ECEC text, mint-cyan #73D8C4 selected row border and primary action, muted coral #F29280 overdue warning. No navy, no electric blue, no purple, no gradients. Compact sans comparable to Inter; monospace comparable to JetBrains Mono only for IDs/CPT/money. Precise thin borders, subtle technical alignment, small uppercase section labels, navigation in a narrow dark top bar. KPI strip integrated into dark console. Highly legible numeric values and generous contrast, status uses text plus subdued colored pill. All sections and eight rows visible. Polished operational control-room UI without decorative terminal code.
+
+04-casefile
+ART DIRECTION: Casefile / remittance-document inspired workbench. Clean white, pale steel gray #E9EEF1, dark slate #33434D and oxblood #853E51 for active navigation and primary action. Absolutely no beige, sage, amber or italic serif. Typography: sturdy upright slab-serif comparable to Roboto Slab only for page/claim headings and large KPI values; Source Sans 3-like sans for table/body, tabular numeric figures. Strong document hierarchy: thin numbered section markers 01 Reconciliation, 02 Denial review, 03 Activity in right claim dossier; ruled white remittance sheet nested in pale steel detail pane. Worklist a clear administrative register with deliberate horizontal dividers, restrained 3px radii. Horizontal nav with oxblood underline. KPI strip sober statement-summary band, no huge illustration. Use all specified exact headings/data, section numbering may precede headings. Shipped financial case-management product, distinctive document grammar.

@@ -6,7 +6,7 @@ export function sendToInspector(text: string) {
   } catch {
     /* ignore */
   }
-  location.hash = '#/'
+  location.hash = '#/inspect'
 }
 export function takeHandoff(): string | null {
   try {

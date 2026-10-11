@@ -1,0 +1,13 @@
+# Local Postgres for development and tests: docker compose -f docker-compose.dev.yml up -d
+name: claims-lens-dev
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: claims
+      POSTGRES_PASSWORD: claims
+      POSTGRES_DB: claims
+    ports: ['127.0.0.1:5442:5432']
+    volumes: [pgdata:/var/lib/postgresql/data]
+volumes:
+  pgdata:
