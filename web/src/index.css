@@ -291,3 +291,23 @@ table.recon tr.total td { font-weight: 700; border-top: 1px solid var(--line-2);
 .issues.ok { background: var(--paid-50); color: var(--ink); }
 .issues.ok b { color: var(--paid); }
 .issues.err { background: var(--deny-50); }
+
+/* inspector */
+.source-bar { display: flex; justify-content: space-between; gap: 12px; align-items: center; width: 100%; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--code); cursor: pointer; color: var(--muted); }
+.source-bar:hover { border-color: var(--accent); }
+.source-bar .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.verdict { border-radius: 12px; padding: 14px 16px; border: 1px solid var(--line-2); }
+.verdict b { font-size: 16px; }
+.verdict p { margin-top: 6px; color: var(--ink-2); }
+.verdict.deny { background: var(--deny-50); border-color: #5a2433; }
+.verdict.ok { background: var(--paid-50); border-color: #1d4d33; }
+@media (max-width: 760px) { .source-bar { flex-direction: column; align-items: flex-start; } }
+@media (max-width: 760px) {
+  table.cardify thead { display: none; }
+  table.cardify, table.cardify tbody, table.cardify tr { display: block; width: 100%; }
+  table.cardify tr { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  table.cardify td { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border: 0; text-align: right; }
+  table.cardify td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: 13px; text-align: left; flex: none; }
+  table.cardify td:first-child { display: block; text-align: left; padding-bottom: 6px; }
+  table.cardify td .row { justify-content: flex-end; }
+}

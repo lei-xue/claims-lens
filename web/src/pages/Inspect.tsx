@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AdjChip, RemarkChip } from '../components/CodeDrawer'
+import { useCodes } from '../lib/codes'
 import { CLAIM_STATUS, PLACE_OF_SERVICE, SEGMENTS } from '../lib/dictionary'
 import { DIAGNOSES, PROCEDURES, sample, SAMPLE_SCENARIOS, SCENARIOS } from '../lib/generate'
 import { takeHandoff } from '../lib/handoff'
@@ -13,6 +14,7 @@ export default function Inspect() {
   const [view, setView] = useState<'summary' | 'segments'>('summary')
   const [over, setOver] = useState(false)
   const [pick, setPick] = useState('bundled:835')
+  const [editing, setEditing] = useState(false)
 
   const res = useMemo<{ r?: Result; error?: string }>(() => {
     if (!text.trim()) return {}
@@ -28,8 +30,12 @@ export default function Inspect() {
     const [scenario, kind] = v.split(':')
     const s = sample(scenario)
     setText(kind === '837' ? s.x837 : s.x835)
+    setEditing(false)
   }
-  const readFile = async (f: File) => setText(await f.text())
+  const readFile = async (f: File) => {
+    setText(await f.text())
+    setEditing(false)
+  }
 
   const errors = res.r?.issues.filter((i) => i.level === 'error') ?? []
   const warnings = res.r?.issues.filter((i) => i.level === 'warning') ?? []
@@ -73,11 +79,18 @@ export default function Inspect() {
               Open file…
               <input type="file" hidden accept=".edi,.txt,.x12,.835,.837,text/plain" onChange={(e) => e.target.files?.[0] && readFile(e.target.files[0])} />
             </label>
-            <button className="btn ghost" onClick={() => setText('')}>Clear</button>
+            <button className="btn ghost" onClick={() => { setText(''); setEditing(true) }}>Clear</button>
           </div>
           <span className="small muted">Samples are synthetic: fictional patients, provider and payers.</span>
         </div>
-        <textarea className="edi" spellCheck={false} value={text} onChange={(e) => setText(e.target.value)} placeholder="ISA*00*          *00*          *ZZ*..." aria-label="EDI text" />
+        {editing || !text.trim() ? (
+          <textarea className="edi" spellCheck={false} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste an 837P or 835 here — ISA*00*          *00*..." aria-label="EDI text" autoFocus={editing} />
+        ) : (
+          <button className="source-bar" onClick={() => setEditing(true)}>
+            <span className="mono small">{text.trim().slice(0, 64)}…</span>
+            <span className="small">{res.r ? `${res.r.segments.length} segments` : ''} · Edit / paste your own</span>
+          </button>
+        )}
       </div>
 
       {res.error && <div className="issues err" style={{ marginTop: 16 }}>{res.error}</div>}
@@ -119,10 +132,25 @@ export default function Inspect() {
 }
 
 function RemitView({ d }: { d: Remit }) {
+  const codes = useCodes()
   const totalCharge = d.claims.reduce((a, c) => a + c.charge, 0)
   const totalPr = d.claims.reduce((a, c) => a + c.patientResp, 0)
+  const denials = d.claims.flatMap((c) => [...c.adjustments, ...c.services.flatMap((s) => s.adjustments)]).filter((a) => a.group !== 'PR' && !(a.group === 'CO' && a.reason === '45'))
+  const byCode = new Map<string, number>()
+  for (const a of denials) byCode.set(`${a.group}-${a.reason}`, (byCode.get(`${a.group}-${a.reason}`) ?? 0) + a.amount)
+  const top = [...byCode].sort((a, b) => b[1] - a[1])[0]
+  const topCarc = top ? codes?.carc.get(top[0].split('-')[1]) : undefined
+  const paid = d.claims.reduce((a, c) => a + c.paid, 0)
   return (
     <div className="stack">
+      <div className={`verdict ${top ? 'deny' : 'ok'}`}>
+        <b>
+          {top
+            ? `${money(paid)} paid of ${money(totalCharge)} billed — ${money([...byCode.values()].reduce((a, b) => a + b, 0))} denied (${[...byCode.keys()].join(', ')}).`
+            : `${money(paid)} paid of ${money(totalCharge)} billed — no denials; the rest is contract write-off and patient share.`}
+        </b>
+        {top && topCarc && <p>Next step for {top[0]} ({topCarc.title}): {topCarc.fix[0]}</p>}
+      </div>
       <div className="grid g4">
         <div className="kpi"><span>Payment</span><b>{money(d.payment)}</b><span>{d.method === 'NON' ? 'No funds moved' : d.method} · {date(d.paymentDate)}</span></div>
         <div className="kpi"><span>Billed</span><b>{money(totalCharge)}</b><span>{d.claims.length} claim{d.claims.length === 1 ? '' : 's'}</span></div>
@@ -151,7 +179,7 @@ function RemitView({ d }: { d: Remit }) {
               </div>
             )}
             <div className="scroll-x">
-              <table className="t">
+              <table className="t cardify">
                 <thead>
                   <tr><th>Service</th><th>Date</th><th className="num">Billed</th><th className="num">Allowed</th><th className="num">Paid</th><th>Adjustments &amp; remarks</th></tr>
                 </thead>
@@ -163,11 +191,11 @@ function RemitView({ d }: { d: Remit }) {
                         {s.modifiers.length > 0 && <span className="mono muted">-{s.modifiers.join('-')}</span>}
                         <div className="small muted">{PROCEDURES[s.procedure]?.label ?? ''}</div>
                       </td>
-                      <td className="small">{s.date ? date(s.date) : '—'}</td>
-                      <td className="num">{money(s.charge)}</td>
-                      <td className="num">{s.allowed !== undefined ? money(s.allowed) : '—'}</td>
-                      <td className="num" style={{ color: s.paid ? 'var(--paid)' : 'var(--deny)' }}>{money(s.paid)}</td>
-                      <td>
+                      <td className="small" data-label="Date">{s.date ? date(s.date) : '—'}</td>
+                      <td className="num" data-label="Billed">{money(s.charge)}</td>
+                      <td className="num" data-label="Allowed">{s.allowed !== undefined ? money(s.allowed) : '—'}</td>
+                      <td className="num" data-label="Paid" style={{ color: s.paid ? 'var(--paid)' : 'var(--deny)' }}>{money(s.paid)}</td>
+                      <td data-label="Why">
                         <div className="row" style={{ gap: 6 }}>
                           {s.adjustments.map((a, i) => <AdjChip key={i} {...a} />)}
                           {s.remarks.map((r) => <RemarkChip key={r} code={r} />)}
