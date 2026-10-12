@@ -146,9 +146,10 @@ export default function Worklist({ selected }: { selected?: number }) {
             )}
           </div>
 
-          <table className="t wl wl-table">
+          <div className="scroll-x wl-table">
+          <table className="t wl">
             <thead>
-              <tr><th>Claim · patient · payer</th><th>Denial</th><th className="num">Denied</th><th className="num">Age</th><th>Owner</th><th>Status</th></tr>
+              <tr><th>Claim · patient · payer</th><th>Denial</th><th className="num">Denied</th><th className="num">Age</th><th className="col-owner">Owner</th><th>Status</th></tr>
             </thead>
             <tbody>
               {list.data?.rows.map((r) => (
@@ -157,12 +158,13 @@ export default function Worklist({ selected }: { selected?: number }) {
                   <td><span className="code-tag">{r.primaryCode}</span><div className="small muted clamp">{r.title}</div></td>
                   <td className="num deny-text">{money(r.amount)}</td>
                   <td className="num mono">{r.age}d</td>
-                  <td>{r.owner ? <span className="avatar sm" title={r.owner}>{initials(r.owner)}</span> : <span className="small muted">—</span>}</td>
+                  <td className="col-owner">{r.owner ? <span className="avatar sm" title={r.owner}>{initials(r.owner)}</span> : <span className="small muted">—</span>}</td>
                   <td><StatusPill s={r.status} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
 
           <ul className="wl-cards" aria-label="Denials">
             {list.data?.rows.map((r) => (
@@ -261,11 +263,11 @@ function DetailPanel({ id, users, onChange, mobileOpen }: { id: number; users: L
             <tbody>
               {d.recon.map((l) => (
                 <tr key={l.lineNo}>
-                  <td><b className="mono">{l.procedure}{l.modifiers.length ? '-' + l.modifiers.join('-') : ''}</b><div className="small muted hide-sm">{PROCEDURES[l.procedure]?.label}</div></td>
+                  <td><b className="mono">{l.procedure}{l.modifiers.length ? '-' + l.modifiers.join('-') : ''}</b><div className="small muted hide-sm one-line" title={PROCEDURES[l.procedure]?.label}>{PROCEDURES[l.procedure]?.label}</div></td>
                   <td className="num" data-label="Billed">{money(l.billed)}</td>
                   <td className="num" data-label="Allowed">{l.allowed === null ? '—' : money(l.allowed)}</td>
                   <td className={`num ${l.paid ? 'paid-text' : 'deny-text'}`} data-label="Paid">{l.missing ? 'not on 835' : money(l.paid)}</td>
-                  <td data-label="Adj."><div className="row" style={{ gap: 4 }}>{l.adjustments.map((a, i) => <AdjChip key={i} {...a} compact />)}{l.remarks.map((r) => <RemarkChip key={r} code={r} />)}</div></td>
+                  <td data-label="Adj."><div className="row" style={{ gap: 4 }}>{l.adjustments.map((a, i) => <AdjChip key={i} {...a} compact />)}{l.remarks.map((r) => <RemarkChip key={r} code={r} compact />)}</div></td>
                 </tr>
               ))}
               <tr className="total"><td>Total</td><td className="num" data-label="Billed">{money(billed)}</td><td className="num" data-label="Allowed">{money(allowed)}</td><td className="num" data-label="Paid">{money(paid)}</td><td className="hide-sm" /></tr>

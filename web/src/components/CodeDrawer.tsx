@@ -114,14 +114,14 @@ export function AdjChip({ group, reason, amount, compact }: { group: string; rea
   )
 }
 
-export function RemarkChip({ code }: { code: string }) {
+export function RemarkChip({ code, compact }: { code: string; compact?: boolean }) {
   const open = useOpenCode()
   const codes = useCodes()
   const r = codes?.rarc.get(code)
   return (
     <button className="code-chip" onClick={() => open({ kind: 'rarc', code })} title={r?.plain}>
       <b>{code}</b>
-      <span>{r?.title ?? 'Remark'}</span>
+      {!compact && <span>{r?.title ?? 'Remark'}</span>}
     </button>
   )
 }

@@ -415,3 +415,27 @@ table.wl tbody tr.sel td:first-child { box-shadow: inset 2px 0 0 var(--accent); 
   .menu-btn { padding: 8px 10px; }
   .user-menu .btn { padding: 8px 6px; }
 }
+
+/* fit the worklist + detail side by side on laptop widths */
+.wb-grid { grid-template-columns: minmax(0, 1.5fr) minmax(360px, 1fr); }
+table.wl td, table.wl th { padding: 10px 8px; }
+table.wl td:first-child, table.wl th:first-child { padding-left: 16px; }
+.payer-cell { max-width: 210px; }
+.clamp { max-width: 190px; }
+.one-line { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1440px) { .col-owner { display: none; } }
+.wb-detail { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.wb-detail::-webkit-scrollbar { width: 8px; }
+.wb-detail::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; }
+table.recon td, table.recon th { padding: 8px 6px; }
+/* below ~1240px the two panes cannot both fit: show the list, open the detail on its own */
+@media (max-width: 1239px) {
+  .wb-grid { grid-template-columns: minmax(0, 1fr); }
+  .wb-detail { display: none; position: static; max-height: none; }
+  .wb-detail.m-open { display: block; }
+  .wb-grid:has(.m-open) .wb-list, .workbench:has(.m-open) .kpi-line { display: none; }
+  .m-back { display: inline-flex; }
+  .col-owner { display: table-cell; }
+}
+@media (max-width: 900px) { .col-owner { display: none; } }
+@media (max-width: 1239px) { .one-line { max-width: 360px; } }
