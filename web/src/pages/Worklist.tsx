@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AdjChip, RemarkChip, useOpenCode } from '../components/CodeDrawer'
+import { CountUp } from '../components/CountUp'
+import { Seg } from '../components/Seg'
 import { api, download, initials, money, money0, shortDate, useApi, useAuth } from '../lib/api'
 import { CATEGORY_LABEL } from '../lib/codes'
 import { PROCEDURES } from '../lib/generate'
@@ -29,10 +31,12 @@ export const STATUS_LABEL: Record<Status, string> = {
 }
 const STATUS_TONE: Record<Status, string> = { new: '', in_progress: 'paid', resubmitted: 'info', appealed: 'warn', resolved: 'paid solid', written_off: 'deny' }
 export const StatusPill = ({ s }: { s: Status }) => <span className={`pill status ${STATUS_TONE[s]}`}>{STATUS_LABEL[s]}</span>
-const ageTone = (d: number) => (d > 45 ? 'deny' : d > 21 ? 'warn' : 'paid')
+
+const FILTER_LABEL: Record<string, string> = { status: 'Status', payer: 'Payer', category: 'Category', owner: 'Owner', age: 'Age' }
 
 export default function Worklist({ selected }: { selected?: number }) {
   const [f, setF] = useState({ status: 'open', payer: '', category: '', owner: '', age: '', q: '', sort: 'age', page: 1 })
+  const [showFilters, setShowFilters] = useState(false)
   const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== '' && v !== undefined).map(([k, v]) => [k, String(v)])).toString()
   const list = useApi<List>(`/denials?${qs}`)
   const kpis = useApi<Kpis>('/kpis')
@@ -44,93 +48,145 @@ export default function Worklist({ selected }: { selected?: number }) {
   }
   const sel = selected ?? list.data?.rows[0]?.id
   const k = kpis.data
+  const go = (id: number) => (location.hash = `#/work/${id}`)
+
+  // human labels for the active filter chips
+  const chipText = (key: string, v: string) => {
+    if (key === 'status') return v === 'all' ? 'Everything' : STATUS_LABEL[v as Status] ?? v
+    if (key === 'payer') return titleCase(look.data?.payers.find((p) => String(p.id) === v)?.name ?? v)
+    if (key === 'category') return CATEGORY_LABEL[v] ?? v
+    if (key === 'owner') return v === 'me' ? 'Me' : v === 'none' ? 'Unassigned' : look.data?.users.find((u) => String(u.id) === v)?.name ?? v
+    if (key === 'age') return `${v} days`
+    return v
+  }
+  const active = (['status', 'payer', 'category', 'owner', 'age'] as const).filter((key) => f[key] && !(key === 'status' && f.status === 'open'))
 
   return (
     <div className="workbench">
-      <div className="kpis">
-        <div className="kpi-card"><span>Open denials</span><b>{k ? money0(k.openAmount) : '…'}</b><em>{k ? `${k.openCount} claims` : ''}</em></div>
-        <div className="kpi-card"><span>Recovered, last 30 days</span><b className="accent">{k ? money0(k.recovered30d) : '…'}</b><em>after resubmission or appeal</em></div>
-        <div className="kpi-card"><span>Avg days to resolve</span><b>{k?.avgDaysToResolve ? k.avgDaysToResolve.toFixed(1) : '—'}</b><em>last 90 days</em></div>
-        <div className="kpi-card"><span>Denial rate</span><b>{k ? `${(k.denialRate90d * 100).toFixed(1)}%` : '…'}</b><em>{k ? `${k.appealDeadlineSoon} appeal deadline${k.appealDeadlineSoon === 1 ? '' : 's'} within 14 days` : ''}</em></div>
+      <div className="kpi-line" aria-label="Key numbers">
+        <span className="seg-id">KPI</span>
+        <span className="kv"><em>open</em><b className="deny-text">{k ? <CountUp value={k.openAmount} format={money0} /> : '…'}</b><em>{k ? `${k.openCount} claims` : ''}</em></span>
+        <span className="kv"><em>recovered 30d</em><b className="accent">{k ? <CountUp value={k.recovered30d} format={money0} /> : '…'}</b></span>
+        <span className="kv"><em>avg days to resolve</em><b>{k?.avgDaysToResolve ? k.avgDaysToResolve.toFixed(1) : '—'}</b></span>
+        <span className="kv"><em>denial rate</em><b>{k ? `${(k.denialRate90d * 100).toFixed(1)}%` : '…'}</b></span>
+        {k && k.appealDeadlineSoon > 0 && <span className="kv"><em>deadlines ≤14d</em><b className="warn-text">{k.appealDeadlineSoon}</b></span>}
+        <span className="seg-sep">~</span>
       </div>
 
       <div className="wb-grid">
         <section className="panel wb-list" aria-label="Denial worklist">
-          <div className="pad" style={{ paddingBottom: 8 }}>
-            <div className="row between">
+          <div className="pad" style={{ paddingBottom: 10 }}>
+            <div className="row between" style={{ alignItems: 'flex-end' }}>
               <div>
-                <h1 style={{ fontSize: 24 }}>Denial worklist</h1>
-                <p className="small muted">{list.data ? `${list.data.total} claims · ${money(list.data.amount)} denied` : 'Loading…'}</p>
+                <Seg as="h1" parts={['WORKLIST', f.status === 'open' ? 'OPEN' : chipText('status', f.status).toUpperCase(), list.data ? money(list.data.amount) : '…']} />
+                <p className="small muted" style={{ marginTop: 4 }}>{list.data ? `${list.data.total} claims · sorted by ${f.sort === 'age' ? 'oldest first' : f.sort === 'amount' ? 'largest first' : 'appeal deadline'}` : 'Loading…'}</p>
               </div>
-              <input type="search" placeholder="Search claim, patient or code" value={f.q} onChange={(e) => set('q', e.target.value)} aria-label="Search" style={{ minWidth: 220 }} />
+              <div className="row" style={{ gap: 8 }}>
+                <input type="search" placeholder="Claim, patient or code" value={f.q} onChange={(e) => set('q', e.target.value)} aria-label="Search" className="wl-search" />
+                <button className={`btn ${showFilters || active.length ? 'on' : ''}`} onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters}>
+                  Filters{active.length ? ` · ${active.length}` : ''}
+                </button>
+              </div>
             </div>
-            <div className="filters">
-              <label><span>Status</span>
-                <select value={f.status} onChange={(e) => set('status', e.target.value)}>
-                  <option value="open">Open (all)</option>
-                  {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  <option value="all">Everything</option>
-                </select>
-              </label>
-              <label><span>Payer</span>
-                <select value={f.payer} onChange={(e) => set('payer', e.target.value)}>
-                  <option value="">All</option>
-                  {look.data?.payers.map((p) => <option key={p.id} value={p.id}>{titleCase(p.name)}</option>)}
-                </select>
-              </label>
-              <label><span>Category</span>
-                <select value={f.category} onChange={(e) => set('category', e.target.value)}>
-                  <option value="">All</option>
-                  {look.data?.categories.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? c}</option>)}
-                </select>
-              </label>
-              <label><span>Owner</span>
-                <select value={f.owner} onChange={(e) => set('owner', e.target.value)}>
-                  <option value="">Anyone</option>
-                  <option value="me">Me</option>
-                  <option value="none">Unassigned</option>
-                  {look.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
-              </label>
-              <label><span>Age</span>
-                <select value={f.age} onChange={(e) => set('age', e.target.value)}>
-                  <option value="">Any</option>
-                  <option value="0-30">0–30 days</option>
-                  <option value="31-60">31–60 days</option>
-                  <option value="61-90">61–90 days</option>
-                  <option value="90+">90+ days</option>
-                </select>
-              </label>
-              <label><span>Sort</span>
-                <select value={f.sort} onChange={(e) => set('sort', e.target.value)}>
-                  <option value="age">Oldest first</option>
-                  <option value="amount">Largest first</option>
-                  <option value="appealBy">Appeal deadline</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <div className="scroll-x">
-            <table className="t wl">
-              <thead>
-                <tr><th>Claim / patient · payer</th><th>Denial</th><th className="num">Denied</th><th className="num">Age</th><th className="hide-md">Owner</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {list.data?.rows.map((r) => (
-                  <tr key={r.id} className={r.id === sel ? 'sel' : ''} onClick={() => (location.hash = `#/work/${r.id}`)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && (location.hash = `#/work/${r.id}`)} aria-selected={r.id === sel}>
-                    <td><b className="mono">{r.patientControl}</b><div className="small muted payer-cell" title={`${r.patient} · ${titleCase(r.payer)}`}>{r.patient} · {titleCase(r.payer)}</div></td>
-                    <td><span className={`code-tag ${r.primaryCode.slice(0, 2).toLowerCase()}`}>{r.primaryCode}</span><div className="small muted clamp">{r.title}</div></td>
-                    <td className="num">{money(r.amount)}</td>
-                    <td className="num"><span className={`age ${ageTone(r.age)}`}>{r.age}d</span></td>
-                    <td className="hide-md">{r.owner ? <span className="avatar sm" title={r.owner}>{initials(r.owner)}</span> : <span className="small muted">—</span>}</td>
-                    <td><StatusPill s={r.status} /></td>
-                  </tr>
+            {active.length > 0 && (
+              <div className="row chips" style={{ marginTop: 10 }}>
+                {active.map((key) => (
+                  <button key={key} className="fchip" onClick={() => set(key, key === 'status' ? 'open' : '')} aria-label={`Remove ${FILTER_LABEL[key]} filter`}>
+                    <em>{FILTER_LABEL[key]}</em> {chipText(key, String(f[key]))} <span aria-hidden="true">×</span>
+                  </button>
                 ))}
-              </tbody>
-            </table>
-            {list.data && !list.data.rows.length && <div className="empty">No denials match these filters. Try “Everything” or clear the search.</div>}
-            {list.error && <div className="empty">{list.error}</div>}
+              </div>
+            )}
+            {showFilters && (
+              <div className="filters">
+                <label><span>Status</span>
+                  <select value={f.status} onChange={(e) => set('status', e.target.value)}>
+                    <option value="open">Open (all)</option>
+                    {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    <option value="all">Everything</option>
+                  </select>
+                </label>
+                <label><span>Payer</span>
+                  <select value={f.payer} onChange={(e) => set('payer', e.target.value)}>
+                    <option value="">All</option>
+                    {look.data?.payers.map((p) => <option key={p.id} value={p.id}>{titleCase(p.name)}</option>)}
+                  </select>
+                </label>
+                <label><span>Category</span>
+                  <select value={f.category} onChange={(e) => set('category', e.target.value)}>
+                    <option value="">All</option>
+                    {look.data?.categories.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? c}</option>)}
+                  </select>
+                </label>
+                <label><span>Owner</span>
+                  <select value={f.owner} onChange={(e) => set('owner', e.target.value)}>
+                    <option value="">Anyone</option>
+                    <option value="me">Me</option>
+                    <option value="none">Unassigned</option>
+                    {look.data?.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                </label>
+                <label><span>Age</span>
+                  <select value={f.age} onChange={(e) => set('age', e.target.value)}>
+                    <option value="">Any</option>
+                    <option value="0-30">0–30 days</option>
+                    <option value="31-60">31–60 days</option>
+                    <option value="61-90">61–90 days</option>
+                    <option value="90+">90+ days</option>
+                  </select>
+                </label>
+                <label><span>Sort</span>
+                  <select value={f.sort} onChange={(e) => set('sort', e.target.value)}>
+                    <option value="age">Oldest first</option>
+                    <option value="amount">Largest first</option>
+                    <option value="appealBy">Appeal deadline</option>
+                  </select>
+                </label>
+              </div>
+            )}
           </div>
+
+          <table className="t wl wl-table">
+            <thead>
+              <tr><th>Claim · patient · payer</th><th>Denial</th><th className="num">Denied</th><th className="num">Age</th><th>Owner</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {list.data?.rows.map((r) => (
+                <tr key={r.id} className={r.id === sel ? 'sel' : ''} onClick={() => go(r.id)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && go(r.id)} aria-selected={r.id === sel}>
+                  <td><b className="mono">{r.patientControl}</b><div className="small muted payer-cell" title={`${r.patient} · ${titleCase(r.payer)}`}>{r.patient} · {titleCase(r.payer)}</div></td>
+                  <td><span className="code-tag">{r.primaryCode}</span><div className="small muted clamp">{r.title}</div></td>
+                  <td className="num deny-text">{money(r.amount)}</td>
+                  <td className="num mono">{r.age}d</td>
+                  <td>{r.owner ? <span className="avatar sm" title={r.owner}>{initials(r.owner)}</span> : <span className="small muted">—</span>}</td>
+                  <td><StatusPill s={r.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <ul className="wl-cards" aria-label="Denials">
+            {list.data?.rows.map((r) => (
+              <li key={r.id}>
+                <a href={`#/work/${r.id}`} className={r.id === sel ? 'sel' : ''}>
+                  <span className="row between" style={{ flexWrap: 'nowrap' }}>
+                    <b className="mono">{r.patientControl}</b>
+                    <b className="mono deny-text">{money(r.amount)}</b>
+                  </span>
+                  <span className="small muted">{r.patient} · {titleCase(r.payer)}</span>
+                  <span className="row" style={{ gap: 8 }}>
+                    <span className="code-tag">{r.primaryCode}</span>
+                    <span className="small">{r.title}</span>
+                  </span>
+                  <span className="row between">
+                    <StatusPill s={r.status} />
+                    <span className="small muted mono">{r.age}d{r.owner ? ` · ${r.owner}` : ''}</span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+          {list.data && !list.data.rows.length && <div className="empty">No denials match. Remove a filter or clear the search.</div>}
+          {list.error && <div className="empty">{list.error}</div>}
           {list.data && list.data.total > list.data.pageSize && (
             <div className="pad row between">
               <span className="small muted">{(list.data.page - 1) * list.data.pageSize + 1}–{Math.min(list.data.total, list.data.page * list.data.pageSize)} of {list.data.total}</span>
@@ -172,6 +228,8 @@ function DetailPanel({ id, users, onChange, mobileOpen }: { id: number; users: L
   const dn = d.denial
   const closed = dn.status === 'resolved' || dn.status === 'written_off'
   const daysLeft = Math.ceil((Date.parse(dn.appealBy) - Date.now()) / 86400000)
+  const lastSent = [...d.history].reverse().find((h) => h.kind === (dn.status === 'resubmitted' ? 'resubmitted' : 'appeal'))
+  const waiting = dn.status === 'resubmitted' || dn.status === 'appealed' ? { at: lastSent?.at ?? null, days: lastSent ? Math.floor((Date.now() - Date.parse(lastSent.at)) / 86400000) : null } : null
   const billed = d.recon.reduce((s, l) => s + l.billed, 0)
   const allowed = d.recon.reduce((s, l) => s + (l.allowed ?? 0), 0)
   const paid = d.recon.reduce((s, l) => s + (l.paid ?? 0), 0)
@@ -189,28 +247,28 @@ function DetailPanel({ id, users, onChange, mobileOpen }: { id: number; users: L
         </div>
         <div className="row small" style={{ marginTop: 10, gap: 14 }}>
           <span className="muted">Denied <b className="ink">{shortDate(dn.deniedOn)}</b></span>
-          <span className={daysLeft < 14 && !closed ? 'deny-text' : 'muted'}>Appeal by <b>{shortDate(dn.appealBy)}</b>{!closed && (daysLeft < 0 ? ` · overdue ${-daysLeft}d` : ` · ${daysLeft}d left`)}</span>
+          <span className={daysLeft < 14 && !closed ? 'warn-text' : 'muted'}>Appeal by <b>{shortDate(dn.appealBy)}</b>{!closed && (daysLeft < 0 ? ` · overdue ${-daysLeft}d` : ` · ${daysLeft}d left`)}</span>
           <span className="muted">Owner <b className="ink">{dn.owner ?? 'unassigned'}</b></span>
         </div>
       </div>
 
       <div className="pad det-sec">
-        <h3>837 vs 835 reconciliation</h3>
-        <p className="small muted">Submitted claim → payer remittance {d.payment ? `· trace ${d.payment.trace} · ${shortDate(d.payment.paymentDate)}` : ''}</p>
+        <Seg as="h2" parts={['RECON', '837', '835']} />
+        <p className="small muted">What you billed vs what the payer did {d.payment ? `· trace ${d.payment.trace} · ${shortDate(d.payment.paymentDate)}` : ''}</p>
         <div className="scroll-x" style={{ marginTop: 10 }}>
-          <table className="t recon">
+          <table className="t recon cardify">
             <thead><tr><th>CPT</th><th className="num">Billed</th><th className="num">Allowed</th><th className="num">Paid</th><th>Adj.</th></tr></thead>
             <tbody>
               {d.recon.map((l) => (
                 <tr key={l.lineNo}>
                   <td><b className="mono">{l.procedure}{l.modifiers.length ? '-' + l.modifiers.join('-') : ''}</b><div className="small muted hide-sm">{PROCEDURES[l.procedure]?.label}</div></td>
-                  <td className="num">{money(l.billed)}</td>
-                  <td className="num">{l.allowed === null ? '—' : money(l.allowed)}</td>
-                  <td className={`num ${l.paid ? 'paid-text' : 'deny-text'}`}>{l.missing ? 'not on 835' : money(l.paid)}</td>
-                  <td><div className="row" style={{ gap: 4 }}>{l.adjustments.map((a, i) => <AdjChip key={i} {...a} compact />)}{l.remarks.map((r) => <RemarkChip key={r} code={r} />)}</div></td>
+                  <td className="num" data-label="Billed">{money(l.billed)}</td>
+                  <td className="num" data-label="Allowed">{l.allowed === null ? '—' : money(l.allowed)}</td>
+                  <td className={`num ${l.paid ? 'paid-text' : 'deny-text'}`} data-label="Paid">{l.missing ? 'not on 835' : money(l.paid)}</td>
+                  <td data-label="Adj."><div className="row" style={{ gap: 4 }}>{l.adjustments.map((a, i) => <AdjChip key={i} {...a} compact />)}{l.remarks.map((r) => <RemarkChip key={r} code={r} />)}</div></td>
                 </tr>
               ))}
-              <tr className="total"><td>Total</td><td className="num">{money(billed)}</td><td className="num">{money(allowed)}</td><td className="num">{money(paid)}</td><td /></tr>
+              <tr className="total"><td>Total</td><td className="num" data-label="Billed">{money(billed)}</td><td className="num" data-label="Allowed">{money(allowed)}</td><td className="num" data-label="Paid">{money(paid)}</td><td className="hide-sm" /></tr>
             </tbody>
           </table>
         </div>
@@ -219,7 +277,7 @@ function DetailPanel({ id, users, onChange, mobileOpen }: { id: number; users: L
 
       <div className="pad det-sec">
         <h3>
-          <button className={`code-tag ${dn.primaryCode.slice(0, 2).toLowerCase()} as-btn`} onClick={() => open({ kind: 'carc', code: dn.primaryCode.split('-')[1], group: dn.primaryCode.split('-')[0] })}>{dn.primaryCode}</button>{' '}
+          <button className="code-tag as-btn" onClick={() => open({ kind: 'carc', code: dn.primaryCode.split('-')[1], group: dn.primaryCode.split('-')[0] })}>{dn.primaryCode}</button>{' '}
           {d.explanation?.title}
         </h3>
         {d.explanation && (
@@ -228,6 +286,15 @@ function DetailPanel({ id, users, onChange, mobileOpen }: { id: number; users: L
             <dt>Likely cause</dt><dd>{d.explanation.causes?.[0]}</dd>
             <dt>What to do</dt><dd><ol>{d.explanation.fix.slice(0, 3).map((x, i) => <li key={i}>{x}</li>)}</ol></dd>
           </dl>
+        )}
+        {waiting && (
+          <div className="waiting" role="status">
+            <b>{dn.status === 'resubmitted' ? 'Corrected claim sent' : 'Appeal sent'} {waiting.at ? shortDate(waiting.at) : ''}</b>
+            <span>
+              Waiting on {titleCase(dn.payer)} — {dn.status === 'resubmitted' ? 'replacement claims usually pay within 14–30 days' : 'appeal decisions usually take 30–60 days'}
+              {waiting.days !== null ? ` (${waiting.days} days so far)` : ''}. The next 835 for this claim will close it automatically.
+            </span>
+          </div>
         )}
         {err && <p className="form-error" role="alert">{err}</p>}
         <div className="actions">
@@ -238,15 +305,30 @@ function DetailPanel({ id, users, onChange, mobileOpen }: { id: number; users: L
               {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </label>
-          <button className="btn primary" disabled={closed || !d.claim} onClick={() => setModal('resubmit')}>Correct &amp; resubmit</button>
-          <button className="btn" disabled={closed} onClick={() => setModal('appeal')}>Draft appeal</button>
-          <button className="btn" disabled={closed} onClick={() => setModal('resolve')}>Resolve…</button>
-          {closed && user?.role === 'manager' && <button className="btn ghost" onClick={() => act(() => api(`/denials/${id}/status`, { method: 'POST', json: { status: 'in_progress' } }))}>Reopen</button>}
+          {closed ? (
+            user?.role === 'manager' ? <button className="btn" onClick={() => act(() => api(`/denials/${id}/status`, { method: 'POST', json: { status: 'in_progress' } }))}>Reopen</button> : <span className="small muted closed-note">Closed — a manager can reopen it.</span>
+          ) : dn.status === 'resubmitted' ? (
+            <>
+              <button className="btn primary" onClick={() => setModal('resolve')}>Record payment…</button>
+              <button className="btn" onClick={() => setModal('appeal')}>Appeal instead</button>
+            </>
+          ) : dn.status === 'appealed' ? (
+            <>
+              <button className="btn primary" onClick={() => setModal('resolve')}>Record decision…</button>
+              <button className="btn" onClick={() => setModal('appeal')}>Edit appeal</button>
+            </>
+          ) : (
+            <>
+              <button className="btn primary" disabled={!d.claim} onClick={() => setModal('resubmit')}>Correct &amp; resubmit</button>
+              <button className="btn" onClick={() => setModal('appeal')}>Draft appeal</button>
+              <button className="btn" onClick={() => setModal('resolve')}>Resolve…</button>
+            </>
+          )}
         </div>
       </div>
 
       <div className="pad det-sec">
-        <h3>Activity</h3>
+        <Seg as="h2" parts={['ACTIVITY', d.history.length]} />
         <ol className="timeline">
           {d.history.map((h) => (
             <li key={h.id} className={`k-${h.kind}`}>

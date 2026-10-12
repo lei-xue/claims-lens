@@ -1,4 +1,5 @@
 import { useOpenCode } from '../components/CodeDrawer'
+import { Seg } from '../components/Seg'
 import { money0, useApi } from '../lib/api'
 import { STATUS_LABEL, titleCase } from './Worklist'
 
@@ -31,8 +32,7 @@ export default function Denials() {
     <>
       <div className="head">
         <div>
-          <span className="eyebrow">Live from the worklist database</span>
-          <h1 style={{ marginTop: 6 }}>Denial analytics</h1>
+          <Seg as="h1" parts={['ANALYTICS', 'DENIALS', money0(denied)]} />
           <p>Where the denied money is, which payers deny most, how much the team wins back, and who can prevent each denial upstream.</p>
         </div>
       </div>
@@ -46,10 +46,10 @@ export default function Denials() {
       <div className="grid g2" style={{ marginBottom: 16 }}>
         <div className="panel pad">
           <h2 style={{ fontSize: 17 }}>Denied dollars by reason</h2>
-          <p className="small muted" style={{ margin: '2px 0 12px' }}>Darker bar = recovered so far. Click a code for the fix.</p>
+          <p className="small muted" style={{ margin: '2px 0 12px' }}><span className="key-dot deny" /> denied · <span className="key-dot paid" /> recovered so far. Click a code for the fix.</p>
           {data.byReason.map((r) => (
             <div className="hbar" key={r.code}>
-              <button className={`code-chip ${r.code.slice(0, 2).toLowerCase()}`} onClick={() => open({ kind: 'carc', code: r.code.split('-')[1], group: r.code.split('-')[0] })} title={r.title}>
+              <button className="code-chip" onClick={() => open({ kind: 'carc', code: r.code.split('-')[1], group: r.code.split('-')[0] })} title={r.title}>
                 <b>{r.code}</b> <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</span>
               </button>
               <div className="track" title={`${money0(r.recovered)} recovered of ${money0(r.amount)}`}>

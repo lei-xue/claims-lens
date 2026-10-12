@@ -29,6 +29,8 @@ export default function App() {
   const route = useRoute()
   const [user, setUser] = useState<User | null>(null)
   const [checked, setChecked] = useState(false)
+  const [menu, setMenu] = useState(false)
+  useEffect(() => setMenu(false), [route])
   useEffect(() => {
     api<{ user: User }>('/me').then((r) => setUser(r.user), () => setUser(null)).finally(() => setChecked(true))
     const out = () => setUser(null)
@@ -73,7 +75,10 @@ export default function App() {
               </svg>
               Claims Lens
             </a>
-            <nav className="tabs" aria-label="Main">
+            <button className="btn menu-btn" aria-expanded={menu} aria-controls="main-nav" onClick={() => setMenu(!menu)}>
+              {tabs.find(([p]) => active(p))?.[1] ?? 'Menu'} <span aria-hidden="true">▾</span>
+            </button>
+            <nav id="main-nav" className={`tabs ${menu ? 'open' : ''}`} aria-label="Main">
               {tabs.map(([p, label]) => (
                 <a key={p} href={`#${p}`} className={active(p)} aria-current={active(p) ? 'page' : undefined}>
                   {label}

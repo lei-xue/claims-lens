@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Seg } from '../components/Seg'
 import { api, money, shortDate, useApi } from '../lib/api'
 import { sendToInspector } from '../lib/handoff'
 import { sample } from '../lib/generate'
@@ -54,7 +55,7 @@ export default function Remittances() {
     <>
       <div className="head">
         <div>
-          <h1>Remittances</h1>
+          <Seg as="h1" parts={['REMITTANCES', list.data ? list.data.length : '…']} />
           <p>Drop an 835 to post it: every claim is matched to the 837 you sent, denials open on the worklist and denials you were already working resolve when the money arrives.</p>
         </div>
         <button className="btn" onClick={tryDemo} disabled={busy}>Generate a demo 837 + 835</button>
@@ -90,10 +91,10 @@ export default function Remittances() {
       )}
 
       <div className="panel" style={{ marginTop: 18 }}>
-        <div className="pad"><h2 style={{ fontSize: 17 }}>Imported remittances</h2></div>
+        <div className="pad"><h2 style={{ fontSize: 17 }}>Imported</h2><p className="small muted">Only remittances that fail a balancing check are flagged.</p></div>
         <div className="scroll-x">
           <table className="t">
-            <thead><tr><th>Paid</th><th>Payer</th><th>Trace</th><th className="num">Amount</th><th className="num">Claims</th><th className="num">Denials</th><th>Checks</th><th /></tr></thead>
+            <thead><tr><th>Paid</th><th>Payer</th><th>Trace</th><th className="num">Amount</th><th className="num">Claims</th><th className="num">Denials</th><th><span className="sr-only">Problems</span></th><th /></tr></thead>
             <tbody>
               {list.data?.slice(0, 100).map((r) => (
                 <tr key={r.id}>
@@ -103,7 +104,7 @@ export default function Remittances() {
                   <td className="num">{money(r.amount)}<div className="small muted">{r.method === 'NON' ? 'no funds' : r.method}</div></td>
                   <td className="num">{r.claims}{r.unmatched > 0 && <div className="small deny-text">{r.unmatched} unmatched</div>}</td>
                   <td className="num">{r.denials || '—'}</td>
-                  <td>{r.issues.length ? <span className="pill warn">{r.issues.length} issue{r.issues.length === 1 ? '' : 's'}</span> : <span className="pill paid">balanced</span>}</td>
+                  <td>{r.issues.length > 0 && <span className="pill deny">{r.issues.length} issue{r.issues.length === 1 ? '' : 's'}</span>}</td>
                   <td><button className="btn" onClick={async () => sendToInspector(await api<string>(`/remittances/${r.id}/raw`))}>Inspect</button></td>
                 </tr>
               ))}

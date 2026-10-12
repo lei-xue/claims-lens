@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Seg } from '../components/Seg'
 import { api, useAuth, type User } from '../lib/api'
 
 const DEMO = [
@@ -32,22 +33,21 @@ export default function Login() {
   return (
     <div className="landing">
       <section className="landing-copy">
-        <span className="eyebrow">Denial management for physician billing teams</span>
+        <Seg parts={['CLAIMS LENS', 'DENIAL WORKBENCH']} />
         <h1>Every denied dollar, worked to a finish.</h1>
         <p className="lead">
-          Claims Lens imports 835 remittances, matches them to the 837 claims you sent, and turns every denial into a work item — explained in plain English, with the fix, the appeal deadline and an audit trail.
+          Import 835 remittances, auto-match them to the 837 claims you sent, and work every denial — plain-English cause, corrected claim or appeal, deadline, audit trail. When the money arrives, the denial closes itself.
         </p>
-        <ul className="features">
-          <li><b>Auto-reconciliation</b> — each service line: billed, allowed, paid and why.</li>
-          <li><b>Worklist</b> — assign, correct &amp; resubmit (frequency-7 837P), draft appeals, write off with manager approval.</li>
-          <li><b>Closed loop</b> — when the corrected claim is paid on a later 835, the denial resolves itself and the recovery is counted.</li>
-        </ul>
+        <div className="seg-demo" aria-hidden="true">
+          <span className="seg-id">CLP</span>*MGFM2605*<b>4</b>*320.00*<b>0</b>~<br />
+          <span className="seg-id">CAS</span>*CO*<b className="deny-text">197</b>*320.00~ <span className="muted">→ prior auth missing · appeal by Aug 27</span>
+        </div>
         <a className="btn" href="#/inspect">Try the file inspector without signing in →</a>
       </section>
 
       <section className="panel pad login-card" aria-labelledby="signin">
-        <h2 id="signin">Sign in to the demo</h2>
-        <p className="small muted" style={{ marginTop: 4 }}>A fictional practice with ~200 days of claims. Data resets nightly.</p>
+        <h2 id="signin">Try it as…</h2>
+        <p className="small muted" style={{ marginTop: 4 }}>A fictional practice, ~200 days of claims. One click, no signup; data resets nightly.</p>
         <div className="stack" style={{ marginTop: 16 }}>
           {DEMO.map((d) => (
             <button key={d.email} className="demo-user" disabled={busy} onClick={() => signIn(d.email, DEMO_PASSWORD)}>
@@ -60,26 +60,28 @@ export default function Login() {
             </button>
           ))}
         </div>
-        <form
-          className="stack"
-          style={{ marginTop: 20 }}
-          onSubmit={(e) => {
-            e.preventDefault()
-            signIn(email, password)
-          }}
-        >
-          <label className="field">
-            <span>Email</span>
-            <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
-          {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="btn primary" disabled={busy} type="submit">{busy ? 'Signing in…' : 'Sign in'}</button>
-          <p className="small muted">Demo password for all accounts: <span className="mono">{DEMO_PASSWORD}</span></p>
-        </form>
+        <details className="email-login">
+          <summary>Sign in with email instead</summary>
+          <form
+            className="stack"
+            style={{ marginTop: 12 }}
+            onSubmit={(e) => {
+              e.preventDefault()
+              signIn(email, password)
+            }}
+          >
+            <label className="field">
+              <span>Email</span>
+              <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            <label className="field">
+              <span>Password</span>
+              <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </label>
+            <button className="btn primary" disabled={busy} type="submit">{busy ? 'Signing in…' : 'Sign in'}</button>
+          </form>
+        </details>
+        {error && <p className="form-error" role="alert">{error}</p>}
       </section>
     </div>
   )
