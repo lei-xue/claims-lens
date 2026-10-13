@@ -49,6 +49,9 @@ app.post('/auth/logout', async (c) => {
   return c.json({ ok: true })
 })
 
+// anonymous visitors get 200 { user: null } so the sign-in page doesn't log a 401
+app.get('/me', async (c) => c.json({ user: await userForToken(getDb(), getCookie(c, COOKIE)) }))
+
 app.use('*', async (c, next) => {
   const user = await userForToken(getDb(), getCookie(c, COOKIE))
   if (!user) return c.json({ error: 'Sign in required' }, 401)
@@ -56,7 +59,6 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-app.get('/me', (c) => c.json({ user: c.get('user') }))
 app.get('/kpis', async (c) => c.json(await kpis(getDb())))
 app.get('/lookups', async (c) => c.json(await lookups(getDb())))
 app.get('/analytics', async (c) => c.json(await analytics(getDb())))
@@ -68,7 +70,7 @@ const listQuery = z.object({
   owner: z.union([z.literal('me'), z.literal('none'), z.coerce.number().int()]).optional(),
   age: z.enum(['0-30', '31-60', '61-90', '90+']).optional(),
   q: z.string().max(80).optional(),
-  sort: z.enum(['age', 'amount', 'appealBy']).optional(),
+  sort: z.enum(['due', 'age', 'amount', 'appealBy']).optional(),
   page: z.coerce.number().int().min(1).max(1000).optional(),
 })
 app.get('/denials', async (c) => c.json(await worklist(getDb(), listQuery.parse(c.req.query()), c.get('user').id)))

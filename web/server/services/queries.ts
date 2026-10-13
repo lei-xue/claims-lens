@@ -13,7 +13,7 @@ export type WorklistFilter = {
   owner?: number | 'me' | 'none'
   age?: '0-30' | '31-60' | '61-90' | '90+'
   q?: string
-  sort?: 'age' | 'amount' | 'appealBy'
+  sort?: 'due' | 'age' | 'amount' | 'appealBy'
   page?: number
 }
 
@@ -36,7 +36,8 @@ export async function worklist(db: Db, f: WorklistFilter, me: number) {
     const like = `%${f.q.trim()}%`
     where.push(or(ilike(claims.patientControl, like), ilike(claims.patientName, like), ilike(denials.primaryCode, like))!)
   }
-  const order = f.sort === 'amount' ? [desc(denials.amount)] : f.sort === 'appealBy' ? [asc(denials.appealBy)] : [desc(ageExpr), desc(denials.amount)]
+  // default: soonest appeal deadline first, so overdue work is always on top
+  const order = f.sort === 'amount' ? [desc(denials.amount)] : f.sort === 'age' ? [desc(ageExpr), desc(denials.amount)] : [asc(denials.appealBy), desc(denials.amount)]
   const pageSize = 25
   const page = Math.max(1, f.page ?? 1)
   const cond = where.length ? and(...where) : undefined
@@ -120,11 +121,22 @@ export async function kpis(db: Db) {
     .innerJoin(remittances, eq(remittances.id, claimPayments.remittanceId))
     .leftJoin(denials, eq(denials.claimPaymentId, claimPayments.id))
     .where(gte(remittances.paymentDate, sql`current_date - 90`))
-  const [overdue] = await db.select({ n: count() }).from(denials).where(and(inArray(denials.status, [...OPEN]), sql`${denials.appealBy} < current_date + 14`))
+  const openNow = and(inArray(denials.status, [...OPEN]))
+  const [late] = await db.select({ n: count(), amt: sum(denials.amount) }).from(denials).where(and(openNow, sql`${denials.appealBy} < current_date`))
+  const [soon] = await db.select({ n: count(), amt: sum(denials.amount) }).from(denials).where(and(openNow, sql`${denials.appealBy} between current_date and current_date + 14`))
+  const [fresh] = await db.select({ n: count(), amt: sum(denials.amount) }).from(denials).where(sql`${denials.deniedOn} >= current_date - 7`)
+  const team = await db
+    .select({ owner: users.name, open: count(), amount: sum(denials.amount) })
+    .from(denials).innerJoin(users, eq(users.id, denials.ownerId))
+    .where(openNow).groupBy(users.name).orderBy(desc(sum(denials.amount)))
+  const [unassigned] = await db.select({ n: count(), amt: sum(denials.amount) }).from(denials).where(and(openNow, isNull(denials.ownerId)))
   return {
     openCount: open.n, openAmount: Number(open.amt ?? 0), recovered30d: Number(rec.amt ?? 0),
     avgDaysToResolve: avg.d ? Number(avg.d) : null, denialRate90d: rate.claims ? Number(rate.denied) / Number(rate.claims) : 0,
-    appealDeadlineSoon: overdue.n,
+    overdue: { n: late.n, amount: Number(late.amt ?? 0) },
+    dueSoon: { n: soon.n, amount: Number(soon.amt ?? 0) },
+    newThisWeek: { n: fresh.n, amount: Number(fresh.amt ?? 0) },
+    team: [...team.map((t) => ({ owner: t.owner, open: t.open, amount: Number(t.amount ?? 0) })), ...(unassigned.n ? [{ owner: 'Unassigned', open: unassigned.n, amount: Number(unassigned.amt ?? 0) }] : [])],
   }
 }
 

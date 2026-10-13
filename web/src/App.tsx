@@ -32,7 +32,7 @@ export default function App() {
   const [menu, setMenu] = useState(false)
   useEffect(() => setMenu(false), [route])
   useEffect(() => {
-    api<{ user: User }>('/me').then((r) => setUser(r.user), () => setUser(null)).finally(() => setChecked(true))
+    api<{ user: User | null }>('/me').then((r) => setUser(r.user), () => setUser(null)).finally(() => setChecked(true))
     const out = () => setUser(null)
     window.addEventListener('cl:signed-out', out)
     return () => window.removeEventListener('cl:signed-out', out)
@@ -57,8 +57,8 @@ export default function App() {
   else page = <Worklist selected={parts[2] ? Number(parts[2]) : undefined} />
 
   const tabs: [string, string][] = user
-    ? [['/work', 'Worklist'], ['/remits', 'Remittances'], ['/analytics', 'Analytics'], ['/inspect', 'Inspector'], ['/codes', 'Codes']]
-    : [['/', 'Sign in'], ['/inspect', 'Inspector'], ['/codes', 'Codes'], ['/about', 'How it works']]
+    ? [['/work', 'Work queue'], ['/analytics', 'Analytics'], ['/remits', 'Imports']]
+    : []
   const active = (p: string) => (p === path || (p === '/work' && path === '/') || (p === '/' && (path === '/login' || (!user && PRIVATE.includes(path)))) ? 'on' : '')
 
   return (
@@ -68,16 +68,16 @@ export default function App() {
           <div className="top-in">
             <a className="logo" href={user ? '#/work' : '#/'}>
               <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
-                <rect width="32" height="32" rx="8" fill="#162029" />
-                <circle cx="14" cy="14" r="7" fill="none" stroke="#2dd4bf" strokeWidth="3" />
-                <path d="M19 19l6 6" stroke="#2dd4bf" strokeWidth="3" strokeLinecap="round" />
-                <path d="M11 14h6" stroke="#e6edf3" strokeWidth="2" strokeLinecap="round" />
+                <rect width="32" height="32" rx="8" fill="#0f766e" />
+                <circle cx="14" cy="14" r="7" fill="none" stroke="#ffffff" strokeWidth="3" />
+                <path d="M19 19l6 6" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
+                <path d="M11 14h6" stroke="#99f6e4" strokeWidth="2" strokeLinecap="round" />
               </svg>
               Claims Lens
             </a>
-            <button className="btn menu-btn" aria-expanded={menu} aria-controls="main-nav" onClick={() => setMenu(!menu)}>
+            {tabs.length > 0 && <button className="btn menu-btn" aria-expanded={menu} aria-controls="main-nav" onClick={() => setMenu(!menu)}>
               {tabs.find(([p]) => active(p))?.[1] ?? 'Menu'} <span aria-hidden="true">▾</span>
-            </button>
+            </button>}
             <nav id="main-nav" className={`tabs ${menu ? 'open' : ''}`} aria-label="Main">
               {tabs.map(([p, label]) => (
                 <a key={p} href={`#${p}`} className={active(p)} aria-current={active(p) ? 'page' : undefined}>
@@ -92,15 +92,18 @@ export default function App() {
                 <button className="btn ghost" onClick={signOut}>Sign out</button>
               </div>
             ) : (
-              <a className="btn ghost gh small" href="https://github.com/lei-xue/claims-lens" target="_blank" rel="noreferrer">GitHub ↗</a>
+              path !== '/' && path !== '/login' ? <a className="btn primary" href="#/" style={{ marginLeft: 'auto' }}>Sign in</a> : null
             )}
           </div>
         </header>
-        <main className={`wrap ${path === '/work' || path === '/' && user ? 'wide' : ''}`}>{page}</main>
-        <footer className="wrap">
-          <p className="small muted">
-            <a href="mailto:hi@leixue.dev">hi@leixue.dev</a>
-          </p>
+        <main className="wrap">{page}</main>
+        <footer className="foot">
+          <span>Claims Lens · demo with fictional data</span>
+          <a href="#/inspect">EDI file inspector</a>
+          <a href="#/codes">Denial code lookup</a>
+          <a href="#/about">How it works</a>
+          <a href="https://github.com/lei-xue/claims-lens" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="mailto:hi@leixue.dev">hi@leixue.dev</a>
         </footer>
       </CodeDrawerProvider>
     </AuthContext.Provider>

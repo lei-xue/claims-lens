@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { Seg } from '../components/Seg'
 import { api, money, shortDate, useApi } from '../lib/api'
-import { sendToInspector } from '../lib/handoff'
 import { sample } from '../lib/generate'
 import { titleCase } from './Worklist'
 
@@ -20,14 +18,14 @@ export default function Remittances() {
     setMsg(null)
     const kind = /ST\*835/.test(text) ? '835' : /ST\*837/.test(text) ? '837' : null
     try {
-      if (!kind) throw new Error('This does not look like an 835 or 837 file (no ST*835 / ST*837 segment).')
+      if (!kind) throw new Error('This isn’t an 835 payment file or an 837 claim file.')
       if (kind === '835') {
         const r = await api<Result835>(`/import/835?name=${encodeURIComponent(name ?? 'pasted.835')}`, { method: 'POST', body: text, headers: { 'content-type': 'text/plain' } })
         const detail = [
-          `${r.claims} claim${r.claims === 1 ? '' : 's'} · ${r.matched} matched to submitted 837s`,
-          `${r.newDenials} new denial${r.newDenials === 1 ? '' : 's'} added to the worklist`,
+          `${r.claims} claim${r.claims === 1 ? '' : 's'} · ${r.matched} matched to your billed claims`,
+          `${r.newDenials} new denial${r.newDenials === 1 ? '' : 's'} added to the work queue`,
           ...(r.resolved ? [`${r.resolved} open denial${r.resolved === 1 ? '' : 's'} resolved by this payment`] : []),
-          ...(r.unmatched.length ? [`No 837 on file for: ${r.unmatched.join(', ')}`] : []),
+          ...(r.unmatched.length ? [`No billed claim found for: ${r.unmatched.join(', ')}`] : []),
           ...r.issues.map((i) => `${i.level}: ${i.message}`),
         ]
         setMsg({ tone: 'ok', text: `Imported ${money(r.payment)} from ${titleCase(r.payer)}`, detail })
@@ -55,10 +53,10 @@ export default function Remittances() {
     <>
       <div className="head">
         <div>
-          <Seg as="h1" parts={['REMITTANCES', list.data ? list.data.length : '…']} />
-          <p>Drop an 835 to post it: every claim is matched to the 837 you sent, denials open on the worklist and denials you were already working resolve when the money arrives.</p>
+          <h1>Imports</h1>
+          <p>Upload the payment files your insurers send (835). Each payment is matched to the claim you billed; anything denied goes to the work queue.</p>
         </div>
-        <button className="btn" onClick={tryDemo} disabled={busy}>Generate a demo 837 + 835</button>
+        <button className="btn" onClick={tryDemo} disabled={busy}>Try with a sample file</button>
       </div>
 
       <label
@@ -78,34 +76,32 @@ export default function Remittances() {
           for (const f of Array.from(e.target.files ?? [])) await upload(await f.text(), f.name)
           e.target.value = ''
         }} />
-        <b>{busy ? 'Importing…' : 'Drop 835 or 837 files here, or click to choose'}</b>
-        <span className="small muted">Files are parsed and balanced first; a remittance that was already imported is refused.</span>
+        <b>{busy ? 'Importing…' : 'Drop payment files here, or click to choose'}</b>
+        <span className="small muted">835 payment files or 837 claim files. The same payment can’t be imported twice.</span>
       </label>
 
       {msg && (
         <div className={`issues ${msg.tone === 'ok' ? 'ok' : 'err'}`} style={{ marginTop: 14 }} role="status">
           <b>{msg.text}</b>
           {msg.detail && msg.detail.length > 0 && <ul>{msg.detail.map((d, i) => <li key={i}>{d}</li>)}</ul>}
-          {msg.tone === 'ok' && <a href="#/work" className="small" style={{ display: 'inline-block', marginTop: 6 }}>Open the worklist →</a>}
+          {msg.tone === 'ok' && <a href="#/work" className="small" style={{ display: 'inline-block', marginTop: 6 }}>Open the work queue</a>}
         </div>
       )}
 
       <div className="panel" style={{ marginTop: 18 }}>
-        <div className="pad"><h2 style={{ fontSize: 17 }}>Imported</h2><p className="small muted">Only remittances that fail a balancing check are flagged.</p></div>
+        <div className="pad"><h2 style={{ fontSize: 17 }}>Recent payments</h2></div>
         <div className="scroll-x">
           <table className="t">
-            <thead><tr><th>Paid</th><th>Payer</th><th>Trace</th><th className="num">Amount</th><th className="num">Claims</th><th className="num">Denials</th><th><span className="sr-only">Problems</span></th><th /></tr></thead>
+            <thead><tr><th>Date</th><th>Payer</th><th className="num">Amount</th><th className="num">Claims</th><th className="num">Denied</th><th><span className="sr-only">Problems</span></th></tr></thead>
             <tbody>
               {list.data?.slice(0, 100).map((r) => (
                 <tr key={r.id}>
                   <td className="small">{shortDate(r.date)}</td>
                   <td>{titleCase(r.payer)}</td>
-                  <td className="mono small">{r.trace}</td>
-                  <td className="num">{money(r.amount)}<div className="small muted">{r.method === 'NON' ? 'no funds' : r.method}</div></td>
+                  <td className="num">{money(r.amount)}</td>
                   <td className="num">{r.claims}{r.unmatched > 0 && <div className="small deny-text">{r.unmatched} unmatched</div>}</td>
                   <td className="num">{r.denials || '—'}</td>
                   <td>{r.issues.length > 0 && <span className="pill deny">{r.issues.length} issue{r.issues.length === 1 ? '' : 's'}</span>}</td>
-                  <td><button className="btn" onClick={async () => sendToInspector(await api<string>(`/remittances/${r.id}/raw`))}>Inspect</button></td>
                 </tr>
               ))}
             </tbody>

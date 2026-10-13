@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AdjChip, RemarkChip } from '../components/CodeDrawer'
 import { useCodes } from '../lib/codes'
-import { Seg } from '../components/Seg'
 import { CLAIM_STATUS, PLACE_OF_SERVICE, SEGMENTS } from '../lib/dictionary'
 import { DIAGNOSES, PROCEDURES, sample, SAMPLE_SCENARIOS, SCENARIOS } from '../lib/generate'
 import { takeHandoff } from '../lib/handoff'
@@ -46,7 +45,7 @@ export default function Inspect() {
     <>
       <div className="head">
         <div>
-          <Seg parts={['INSPECT', '837P', '835']} />
+          <span className="eyebrow">Developer tool · X12 837P and 835</span>
           <h1 style={{ marginTop: 6 }}>Read a claim file like a biller would</h1>
           <p>Paste or drop an 837P or 835. Claims Lens explains every segment, checks that the money balances, and translates each denial code into what happened and what to do next. Everything runs in your browser — nothing is uploaded.</p>
         </div>

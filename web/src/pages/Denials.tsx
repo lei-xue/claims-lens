@@ -1,5 +1,4 @@
 import { useOpenCode } from '../components/CodeDrawer'
-import { Seg } from '../components/Seg'
 import { money0, useApi } from '../lib/api'
 import { STATUS_LABEL, titleCase } from './Worklist'
 
@@ -23,34 +22,31 @@ export default function Denials() {
   const maxAmt = Math.max(1, ...data.byReason.map((r) => r.amount))
   const payers = data.byPayer.map((p) => ({ ...p, rate: p.claims ? p.denied / p.claims : 0 })).sort((a, b) => b.rate - a.rate)
   const maxRate = Math.max(0.01, ...payers.map((p) => p.rate))
-  const owners = new Map<string, number>()
-  for (const r of data.byReason) owners.set(r.owner, (owners.get(r.owner) ?? 0) + r.amount)
-  const ownerRows = [...owners].sort((a, b) => b[1] - a[1])
   const months = data.byMonth.slice(-8)
 
   return (
     <>
       <div className="head">
         <div>
-          <Seg as="h1" parts={['ANALYTICS', 'DENIALS', money0(denied)]} />
-          <p>Where the denied money is, which payers deny most, how much the team wins back, and who can prevent each denial upstream.</p>
+          <h1>Analytics</h1>
+          <p>Where denied money comes from and how much the team wins back.</p>
         </div>
       </div>
-      <div className="kpis" style={{ marginBottom: 16 }}>
-        <div className="kpi-card"><span>Denied (all time)</span><b>{money0(denied)}</b><em>{data.byReason.reduce((s, r) => s + r.n, 0)} denials</em></div>
-        <div className="kpi-card"><span>Recovered</span><b className="accent">{money0(recovered)}</b><em>{denied ? `${((100 * recovered) / denied).toFixed(0)}% of denied dollars` : ''}</em></div>
-        <div className="kpi-card"><span>Win rate</span><b>{closedN ? `${((100 * won) / closedN).toFixed(0)}%` : '—'}</b><em>of closed denials were paid</em></div>
-        <div className="kpi-card"><span>Still open</span><b>{money0(data.byStatus.filter((s) => !['resolved', 'written_off'].includes(s.status)).reduce((s, x) => s + x.amount, 0))}</b><em>across {data.byStatus.filter((s) => !['resolved', 'written_off'].includes(s.status)).reduce((s, x) => s + x.n, 0)} claims</em></div>
+      <div className="kpis">
+        <div className="kpi-card"><span>Denied</span><b>{money0(denied)}</b><em>{data.byReason.reduce((s, r) => s + r.n, 0)} claims</em></div>
+        <div className="kpi-card"><span>Recovered</span><b className="paid-text">{money0(recovered)}</b><em>{denied ? `${Math.round((100 * recovered) / denied)}% of denied dollars` : ''}</em></div>
+        <div className="kpi-card"><span>Win rate</span><b>{closedN ? `${Math.round((100 * won) / closedN)}%` : '—'}</b><em>closed denials that got paid</em></div>
+        <div className="kpi-card"><span>Highest denial rate</span><b>{payers[0] ? `${(100 * payers[0].rate).toFixed(0)}%` : '—'}</b><em>{payers[0] ? titleCase(payers[0].payer) : ''}</em></div>
       </div>
 
-      <div className="grid g2" style={{ marginBottom: 16 }}>
+      <div className="grid g2">
         <div className="panel pad">
-          <h2 style={{ fontSize: 17 }}>Denied dollars by reason</h2>
-          <p className="small muted" style={{ margin: '2px 0 12px' }}><span className="key-dot deny" /> denied · <span className="key-dot paid" /> recovered so far. Click a code for the fix.</p>
-          {data.byReason.map((r) => (
+          <h2 style={{ fontSize: 16 }}>Top reasons for denial</h2>
+          <p className="small muted" style={{ margin: '2px 0 12px' }}><span className="key-dot deny" /> denied · <span className="key-dot paid" /> recovered</p>
+          {data.byReason.slice(0, 6).map((r) => (
             <div className="hbar" key={r.code}>
-              <button className="code-chip" onClick={() => open({ kind: 'carc', code: r.code.split('-')[1], group: r.code.split('-')[0] })} title={r.title}>
-                <b>{r.code}</b> <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</span>
+              <button className="code-chip" onClick={() => open({ kind: 'carc', code: r.code.split('-')[1], group: r.code.split('-')[0] })} title={`${r.code} · ${r.title}`}>
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title || r.code}</span>
               </button>
               <div className="track" title={`${money0(r.recovered)} recovered of ${money0(r.amount)}`}>
                 <div className="fill deny" style={{ width: `${(100 * r.amount) / maxAmt}%`, position: 'relative' }}>
@@ -61,46 +57,17 @@ export default function Denials() {
             </div>
           ))}
         </div>
-        <div className="stack">
-          <div className="panel pad">
-            <h2 style={{ fontSize: 17, marginBottom: 10 }}>Denial rate by payer</h2>
-            {payers.map((p) => (
-              <div className="hbar" key={p.payer}>
-                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={p.payer}>{titleCase(p.payer)}</span>
-                <div className="track"><div className="fill" style={{ width: `${(100 * p.rate) / maxRate}%` }} /></div>
-                <span className="v">{(100 * p.rate).toFixed(1)}%</span>
-              </div>
-            ))}
-          </div>
-          <div className="panel pad">
-            <h2 style={{ fontSize: 17 }}>Monthly denial rate</h2>
-            <Trend values={months.map((m) => (m.claims ? m.denied / m.claims : 0))} labels={months.map((m) => new Date(m.month + '-15').toLocaleDateString('en-US', { month: 'short' }))} />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid g2">
         <div className="panel pad">
-          <h2 style={{ fontSize: 17 }}>Who can prevent them</h2>
-          <p className="small muted" style={{ margin: '2px 0 12px' }}>Denied dollars by the team that usually owns the root cause.</p>
-          {ownerRows.map(([k, v]) => (
-            <div className="hbar" key={k}>
-              <span style={{ textTransform: 'capitalize' }}>{k}</span>
-              <div className="track"><div className="fill" style={{ width: `${(100 * v) / Math.max(1, ownerRows[0][1])}%` }} /></div>
-              <span className="v">{money0(v)}</span>
+          <h2 style={{ fontSize: 16, marginBottom: 10 }}>Denial rate by insurer</h2>
+          {payers.map((p) => (
+            <div className="hbar" key={p.payer}>
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={p.payer}>{titleCase(p.payer)}</span>
+              <div className="track"><div className="fill" style={{ width: `${(100 * p.rate) / maxRate}%` }} /></div>
+              <span className="v">{(100 * p.rate).toFixed(1)}%</span>
             </div>
           ))}
-        </div>
-        <div className="panel pad">
-          <h2 style={{ fontSize: 17 }}>Team</h2>
-          <table className="t" style={{ marginTop: 8 }}>
-            <thead><tr><th>Biller</th><th className="num">Open</th><th className="num">Resolved</th><th className="num">Recovered</th></tr></thead>
-            <tbody>
-              {data.byOwner.map((o) => (
-                <tr key={o.owner}><td>{o.owner}</td><td className="num">{o.open}</td><td className="num">{o.resolved}</td><td className="num">{money0(o.recovered)}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <h2 style={{ fontSize: 16, margin: '22px 0 4px' }}>Denial rate by month</h2>
+          <Trend values={months.map((m) => (m.claims ? m.denied / m.claims : 0))} labels={months.map((m) => new Date(m.month + '-15').toLocaleDateString('en-US', { month: 'short' }))} />
         </div>
       </div>
     </>

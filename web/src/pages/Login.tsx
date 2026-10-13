@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { Seg } from '../components/Seg'
 import { api, useAuth, type User } from '../lib/api'
 
 const DEMO = [
   { email: 'dana@demo.claimslens.dev', name: 'Dana Kim', role: 'Biller' },
   { email: 'jordan@demo.claimslens.dev', name: 'Jordan Lee', role: 'Biller' },
-  { email: 'alex@demo.claimslens.dev', name: 'Alex Morgan', role: 'Manager — can approve large write-offs and reopen closed work' },
+  { email: 'alex@demo.claimslens.dev', name: 'Alex Morgan', role: 'Billing manager · sees team workload' },
 ]
 const DEMO_PASSWORD = 'demo1234!'
 
@@ -33,16 +32,16 @@ export default function Login() {
   return (
     <div className="landing">
       <section className="landing-copy">
-        <Seg parts={['CLAIMS LENS', 'DENIAL WORKBENCH']} />
+        <span className="eyebrow">Denial management for medical practices</span>
         <h1>Every denied dollar, worked to a finish.</h1>
         <p className="lead">
-          Import 835 remittances, auto-match them to the 837 claims you sent, and work every denial — plain-English cause, corrected claim or appeal, deadline, audit trail. When the money arrives, the denial closes itself.
+          See what insurers didn’t pay, why, and what to do next — so your team recovers it before the appeal deadline.
         </p>
-        <div className="seg-demo" aria-hidden="true">
-          <span className="seg-id">CLP</span>*MGFM2605*<b>4</b>*320.00*<b>0</b>~<br />
-          <span className="seg-id">CAS</span>*CO*<b className="deny-text">197</b>*320.00~ <span className="muted">→ prior auth missing · appeal by Aug 27</span>
+        <div className="proof">
+          <span><b>Every denial</b> becomes a task with a deadline</span>
+          <span><b>Plain-English</b> reason and next step</span>
+          <span><b>Closes itself</b> when the payer pays</span>
         </div>
-        <a className="btn" href="#/inspect">Try the file inspector without signing in →</a>
       </section>
 
       <section className="panel pad login-card" aria-labelledby="signin">
