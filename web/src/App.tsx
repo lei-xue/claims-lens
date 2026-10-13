@@ -97,6 +97,11 @@ export default function App() {
           </div>
         </header>
         <main className={`wrap ${path === '/work' || path === '/' && user ? 'wide' : ''}`}>{page}</main>
+        <footer className="wrap">
+          <p className="small muted">
+            <a href="mailto:hi@leixue.dev">hi@leixue.dev</a>
+          </p>
+        </footer>
       </CodeDrawerProvider>
     </AuthContext.Provider>
   )
