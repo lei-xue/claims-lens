@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
-RUN npx vite build \
+RUN node scripts/prerender-codes.mjs && npx vite build \
  && npx esbuild server/index.ts server/seed.ts server/migrate.ts --bundle --platform=node --target=node22 --format=cjs \
       --outdir=dist-server --out-extension:.js=.cjs --external:pg-native --log-level=warning
 

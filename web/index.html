@@ -4,14 +4,61 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Denial management for medical practices: see what insurers did not pay, why, and what to do next." />
-    <title>Claims Lens — read 837 & 835 files</title>
+    <title>Claims Lens — denial management for medical practices</title>
+    <meta name="description" content="See what insurers didn't pay, why, and what to do next: Claims Lens matches 835 payments to 837 claims, turns every denial into a task with a plain-English reason and appeal deadline, and closes it when the money arrives." />
+    <link rel="canonical" href="https://claims.leixue.dev/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Claims Lens" />
+    <meta property="og:title" content="Claims Lens — denial management for medical practices" />
+    <meta property="og:description" content="A denial work queue for billing teams: plain-English reasons, appeal deadlines, corrected claims and appeals, with a live demo on fictional data." />
+    <meta property="og:url" content="https://claims.leixue.dev/" />
+    <meta property="og:image" content="https://claims.leixue.dev/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Claims Lens work queue: open denials sorted by appeal deadline with a denial explained in plain English" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Claims Lens — denial management for medical practices" />
+    <meta name="twitter:description" content="Plain-English denial reasons, appeal deadlines and a work queue for medical billing teams." />
+    <meta name="twitter:image" content="https://claims.leixue.dev/og.jpg" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Claims Lens",
+        "url": "https://claims.leixue.dev/",
+        "description": "Denial-management work queue for US medical practices: reconciles X12 835 remittances with 837P claims, explains each denial code (CARC/RARC) in plain English with the next step and appeal deadline, and closes denials automatically when payment arrives.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "isAccessibleForFree": true,
+        "image": "https://claims.leixue.dev/og.jpg",
+        "author": {
+          "@type": "Person",
+          "name": "Sherry (Lei) Xue",
+          "url": "https://blog.leixue.dev",
+          "sameAs": ["https://github.com/lei-xue"]
+        }
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Shown until the app loads, and to crawlers that don't run JavaScript. React replaces it. -->
+      <main style="max-width: 760px; margin: 0 auto; padding: 48px 20px; font: 16px/1.6 system-ui, sans-serif; color: #1f2933">
+        <h1 style="font-size: 32px; line-height: 1.15">Claims Lens: every denied dollar, worked to a finish</h1>
+        <p>Claims Lens is a denial-management work queue for US medical practices. It shows what insurers didn't pay, why, and what to do next, so a billing team recovers the money before the appeal deadline.</p>
+        <ul>
+          <li><strong>Reconciliation:</strong> imports insurer payment files (X12 835 remittances) and matches each payment to the claim the practice sent (X12 837P), line by line: billed, allowed, paid and every adjustment.</li>
+          <li><strong>Work queue:</strong> every denial becomes a task with a plain-English reason, the denied amount and the appeal deadline; overdue items come first.</li>
+          <li><strong>Plain-English denial codes:</strong> each claim adjustment reason code (CARC) and remark code (RARC) is explained with common causes and the next step.</li>
+          <li><strong>Closed loop:</strong> fix and resubmit a corrected claim or draft an appeal; when the next payment arrives, the denial closes itself and the recovery is counted.</li>
+        </ul>
+        <p><a href="/codes/">Browse every denial code explained</a> · <a href="/#/inspect">Open the EDI file inspector</a> · <a href="https://github.com/lei-xue/claims-lens">Source on GitHub</a></p>
+        <p style="color: #52606d">A portfolio demo by Sherry (Lei) Xue with fictional patients, practice and insurers.</p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

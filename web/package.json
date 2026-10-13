@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/prerender-codes.mjs && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "dev:api": "tsx watch server/index.ts",
@@ -13,7 +13,8 @@
     "db:migrate": "tsx server/migrate.ts",
     "db:seed": "tsx server/seed.ts",
     "typecheck": "tsc -b && tsc -p tsconfig.server.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prerender": "node scripts/prerender-codes.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.17",

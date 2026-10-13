@@ -1,0 +1,31 @@
+# Claims Lens
+
+> Claims Lens is a denial-management work queue for US medical practices. It imports insurer payment files (X12 835 remittances), matches them to the claims the practice sent (X12 837P), turns every denied line into a task with a plain-English reason, the denied amount and the appeal deadline, and closes the task automatically when a later payment arrives. It is a portfolio demo with fictional data.
+
+Who it is for: billing staff and billing managers at physician practices, and revenue-cycle teams evaluating denial workflows.
+
+## Key pages
+
+- [Live demo and sign-in](https://claims.leixue.dev/): one-click sign-in as a biller or a billing manager; about 200 days of fictional claims, reset nightly.
+- [Denial codes in plain English](https://claims.leixue.dev/codes/): every claim adjustment reason code (CARC) and remittance advice remark code (RARC), with common causes and the next step. One static page per code, e.g. [CARC 197](https://claims.leixue.dev/codes/carc-197.html) and [CARC 16](https://claims.leixue.dev/codes/carc-16.html).
+- [EDI file inspector](https://claims.leixue.dev/#/inspect): paste or drop an 837P or 835 and read it segment by segment with balancing checks; runs in the browser, no sign-in.
+- [How it works](https://claims.leixue.dev/#/about)
+- [Source code](https://github.com/lei-xue/claims-lens)
+
+## What it does
+
+- Reconciles each 835 claim and service line against the submitted 837P: billed, allowed, paid and every adjustment.
+- Work queue sorted by appeal deadline, with overdue items first; views for mine, unassigned, waiting on payer and closed.
+- Per denial: plain-English reason and next step, assign, notes, a corrected replacement claim (frequency 7) or a drafted appeal letter, and recording the outcome.
+- Managers see team workload; write-offs over $500 and reopening closed work need a manager.
+- Analytics: denied versus recovered dollars by reason, denial rate by insurer and by month, win rate.
+
+## Notes
+
+- All patients, the practice and the insurers are fictional.
+- Code explanations are original plain-language text reviewed against the official X12 definitions; the official wording is at https://x12.org/codes.
+- Stack: React and TypeScript, a Hono API on Node, PostgreSQL.
+
+## Author
+
+Sherry (Lei) Xue — https://blog.leixue.dev · https://github.com/lei-xue · contact: hi@leixue.dev
