@@ -28,8 +28,10 @@ services:
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U claims']
-      interval: 5s
-      retries: 20
+      interval: 60s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
     mem_limit: 256m
     networks: [internal]
     logging: { driver: json-file, options: { max-size: 5m, max-file: '2' } }
