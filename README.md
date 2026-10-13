@@ -6,14 +6,14 @@ A denial-management workbench for physician billing teams: import 835 remittance
 
 ![Claims Lens home page](docs/preview.jpg)
 
-| Worklist and a denial | File inspector (no sign-in) |
+| Work queue and a denial | File inspector (no sign-in) |
 | --- | --- |
-| ![Worklist with a denial open](docs/worklist.jpg) | ![837P/835 inspector](docs/inspector.jpg) |
+| ![Work queue with a denial open](docs/worklist.jpg) | ![837P/835 inspector](docs/inspector.jpg) |
 
 ## What it does
 
 - **Import & reconcile**: parse and balance-check 835s, match them to submitted 837Ps claim by claim and line by line; duplicates are refused.
-- **Worklist**: every non-routine adjustment becomes a work item with codes, denied amount, age and appeal deadline.
+- **Work queue**: every non-routine adjustment becomes a task with a plain-English reason, the amount and the appeal deadline; overdue work sorts to the top and managers see team workload.
 - **Work a denial**: plain-English cause and next steps, notes, a corrected 837P (frequency 7) or a drafted appeal letter, resolve or write off (large write-offs need a manager), all on an activity timeline.
 - **Closed loop**: when a later 835 pays the claim, its open denial resolves itself.
 - **Analytics, inspector and code lookup**: denial and recovery trends; read any 837P/835 segment by segment; every CARC/RARC explained.
