@@ -25,6 +25,15 @@ function useRoute() {
 
 const PRIVATE = ['/work', '/remits', '/analytics']
 
+// a malformed escape in a pasted link (#/codes/%) must not throw during render
+const decode = (s: string) => {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
 export default function App() {
   const route = useRoute()
   const [user, setUser] = useState<User | null>(null)
@@ -49,7 +58,7 @@ export default function App() {
   let page
   if (!checked) page = <div className="empty">Loading…</div>
   else if (path === '/inspect') page = <Inspect />
-  else if (path === '/codes') page = <CodesPage query={decodeURIComponent(parts[2] ?? '')} />
+  else if (path === '/codes') page = <CodesPage query={decode(parts[2] ?? '')} />
   else if (path === '/about') page = <About />
   else if (!user || path === '/login') page = <Login />
   else if (path === '/remits') page = <Remittances />

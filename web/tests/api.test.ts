@@ -1,15 +1,19 @@
 // End-to-end API tests against a real Postgres: seed → login → work a denial → reimport.
+import { eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { app } from '../server/app'
-import { closeDb, getDb } from '../server/db'
+import { closeDb, getDb, schema } from '../server/db'
 import { seed, DEMO_PASSWORD } from '../server/seed'
 import { import835 } from '../server/services/imports'
-import { makeClaim, to835, to837 } from '../src/lib/generate'
+import { makeClaim, PAYERS, to835, to837 } from '../src/lib/generate'
 
 let cookie = ''
 const call = (path: string, init: RequestInit = {}) =>
   app.request(path, { ...init, headers: { 'content-type': 'application/json', cookie, ...(init.headers ?? {}) } })
 const post = (path: string, body: unknown) => call(path, { method: 'POST', body: JSON.stringify(body) })
+const upload = (path: string, body: string) => call(path, { method: 'POST', body })
+const denialsFor = (pcn: string) =>
+  getDb().select({ id: schema.denials.id, status: schema.denials.status }).from(schema.denials).innerJoin(schema.claims, eq(schema.claims.id, schema.denials.claimId)).where(eq(schema.claims.patientControl, pcn))
 
 beforeAll(async () => {
   await seed(40)
@@ -71,6 +75,10 @@ describe('workflow', () => {
     const id = list.rows[0].id
     expect((await post(`/api/denials/${id}/status`, { status: 'resolved', recovered: 10 })).status).toBe(200)
     expect((await post(`/api/denials/${id}/status`, { status: 'in_progress' })).status).toBe(403)
+    // resubmitting or appealing must not reopen it either
+    expect((await post(`/api/denials/${id}/resubmit`, {})).status).toBe(400)
+    expect((await post(`/api/denials/${id}/appeal`, {})).status).toBe(400)
+    expect((await (await call(`/api/denials/${id}`)).json()).denial.status).toBe('resolved')
   })
 })
 
@@ -97,5 +105,54 @@ describe('imports', () => {
     paid.payerClaimId = denied.payerClaimId + '1'
     const second = await (await call('/api/import/835', { method: 'POST', body: to835([paid], 7002) })).json()
     expect(second.resolved).toBe(1)
+  })
+  it('keeps a denial open when the next remittance still denies part of the claim', async () => {
+    const day = new Date()
+    const denied = makeClaim(888, { scenario: 'missingInfo', day })
+    denied.id = 'TESTPARTIAL1'
+    await upload('/api/import/837', to837([denied]))
+    expect((await (await upload('/api/import/835', to835([denied], 7101))).json()).newDenials).toBe(1)
+    const partial = makeClaim(888, { scenario: 'bundled', day, payer: denied.payer })
+    partial.id = denied.id
+    partial.payerClaimId = denied.payerClaimId + '1'
+    expect(partial.outcome.lines.some((l) => l.paid > 0)).toBe(true)
+    const second = await (await upload('/api/import/835', to835([partial], 7102))).json()
+    expect(second.resolved).toBe(0)
+    expect((await denialsFor(denied.id)).map((d) => d.status)).toEqual(['in_progress'])
+  })
+  it('resolves the original denial when an imported corrected claim gets paid', async () => {
+    const day = new Date()
+    const denied = makeClaim(999, { scenario: 'missingInfo', day })
+    denied.id = 'TESTCORRECT1'
+    await upload('/api/import/837', to837([denied]))
+    await upload('/api/import/835', to835([denied], 7201))
+    const [d] = await denialsFor(denied.id)
+    const { x837 } = await (await post(`/api/denials/${d.id}/resubmit`, {})).json()
+    expect((await (await upload('/api/import/837', x837)).json()).claims).toBe(1) // frequency 7 = a second claims row
+    const paid = makeClaim(999, { scenario: 'paid', day, payer: denied.payer })
+    paid.id = denied.id
+    paid.payerClaimId = denied.payerClaimId + '1'
+    expect((await (await upload('/api/import/835', to835([paid], 7202))).json()).resolved).toBe(1)
+    expect((await denialsFor(denied.id)).map((x) => x.status)).toEqual(['resolved'])
+  })
+  it("takes each claim's payer from its own subscriber loop", async () => {
+    const day = new Date()
+    const [a, b, c] = [0, 0, 1].map((p, n) => makeClaim(5151 + n, { scenario: 'paid', day, payer: PAYERS[p] }))
+    ;[a.id, b.id, c.id] = ['TESTPAYER1', 'TESTPAYER2', 'TESTPAYER3']
+    // put the second claim under the first claim's subscriber (HL, SBR, NM1*IL, N3, N4, DMG, NM1*PR removed)
+    const segs = to837([a, b, c]).split('~\n')
+    segs.splice(segs.findIndex((s) => s.startsWith(`CLM*${b.id}*`)) - 7, 7)
+    const st = segs.findIndex((s) => s.startsWith('ST*'))
+    const se = segs.findIndex((s) => s.startsWith('SE*'))
+    segs[se] = `SE*${se - st + 1}*0001`
+    expect((await (await upload('/api/import/837', segs.join('~\n'))).json()).claims).toBe(3)
+    const { claims, payers } = schema
+    const rows = await getDb().select({ pcn: claims.patientControl, payer: payers.code }).from(claims).innerJoin(payers, eq(payers.id, claims.payerId)).where(inArray(claims.patientControl, [a.id, b.id, c.id]))
+    expect(Object.fromEntries(rows.map((r) => [r.pcn, r.payer]))).toEqual({ [a.id]: PAYERS[0].id, [b.id]: PAYERS[0].id, [c.id]: PAYERS[1].id })
+  })
+  it('answers bad uploads and oversized bodies with clean errors', async () => {
+    expect((await upload('/api/import/837', 'not an X12 file')).status).toBe(400)
+    expect((await upload('/api/import/835', 'x'.repeat(2_000_001))).status).toBe(413)
+    expect((await post('/api/auth/login', { email: 'dana@demo.claimslens.dev', password: 'x'.repeat(2_000_001) })).status).toBe(413)
   })
 })

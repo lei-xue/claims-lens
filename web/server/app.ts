@@ -1,5 +1,6 @@
 // HTTP API. Session cookie auth; every mutating route requires a signed-in user.
 import { Hono, type Context } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { z } from 'zod'
 import { getDb } from './db'
@@ -21,6 +22,9 @@ app.onError((err, c) => {
   return c.json({ error: 'Something went wrong' }, 500)
 })
 
+// cap every request body before it is buffered (the largest legitimate body is a 2 MB upload)
+app.use('*', bodyLimit({ maxSize: MAX_UPLOAD, onError: (c) => c.json({ error: 'File is larger than 2 MB.' }, 413) }))
+
 // tiny per-IP limiter for login attempts
 const attempts = new Map<string, { n: number; until: number }>()
 function ipOf(c: Context) {
@@ -35,6 +39,7 @@ app.post('/auth/login', async (c) => {
   const body = z.object({ email: z.string().max(200), password: z.string().max(200) }).parse(await c.req.json())
   const res = await login(getDb(), body.email, body.password)
   if (!res) {
+    if (attempts.size > 10_000) for (const [k, v] of attempts) if (v.until <= Date.now()) attempts.delete(k)
     attempts.set(ip, { n: (a && a.until > Date.now() ? a.n : 0) + 1, until: Date.now() + 10 * 60000 })
     return c.json({ error: 'Email or password is incorrect.' }, 401)
   }
