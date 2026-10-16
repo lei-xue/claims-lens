@@ -13,7 +13,7 @@ const call = (path: string, init: RequestInit = {}) =>
 const post = (path: string, body: unknown) => call(path, { method: 'POST', body: JSON.stringify(body) })
 const upload = (path: string, body: string) => call(path, { method: 'POST', body })
 const denialsFor = (pcn: string) =>
-  getDb().select({ id: schema.denials.id, status: schema.denials.status }).from(schema.denials).innerJoin(schema.claims, eq(schema.claims.id, schema.denials.claimId)).where(eq(schema.claims.patientControl, pcn))
+  getDb().select({ id: schema.denials.id, status: schema.denials.status, recovered: schema.denials.recovered }).from(schema.denials).innerJoin(schema.claims, eq(schema.claims.id, schema.denials.claimId)).where(eq(schema.claims.patientControl, pcn))
 
 beforeAll(async () => {
   await seed(40)
@@ -118,7 +118,9 @@ describe('imports', () => {
     expect(partial.outcome.lines.some((l) => l.paid > 0)).toBe(true)
     const second = await (await upload('/api/import/835', to835([partial], 7102))).json()
     expect(second.resolved).toBe(0)
-    expect((await denialsFor(denied.id)).map((d) => d.status)).toEqual(['in_progress'])
+    const after = await denialsFor(denied.id)
+    expect(after.map((d) => d.status)).toEqual(['in_progress'])
+    expect(after[0].recovered).toBeGreaterThan(0)
   })
   it('resolves the original denial when an imported corrected claim gets paid', async () => {
     const day = new Date()
@@ -153,6 +155,6 @@ describe('imports', () => {
   it('answers bad uploads and oversized bodies with clean errors', async () => {
     expect((await upload('/api/import/837', 'not an X12 file')).status).toBe(400)
     expect((await upload('/api/import/835', 'x'.repeat(2_000_001))).status).toBe(413)
-    expect((await post('/api/auth/login', { email: 'dana@demo.claimslens.dev', password: 'x'.repeat(2_000_001) })).status).toBe(413)
+    expect((await post('/api/auth/login', { email: 'dana@demo.claimslens.dev', password: 'x'.repeat(2_100_000) })).status).toBe(413)
   })
 })

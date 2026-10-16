@@ -22,8 +22,9 @@ app.onError((err, c) => {
   return c.json({ error: 'Something went wrong' }, 500)
 })
 
-// cap every request body before it is buffered (the largest legitimate body is a 2 MB upload)
-app.use('*', bodyLimit({ maxSize: MAX_UPLOAD, onError: (c) => c.json({ error: 'File is larger than 2 MB.' }, 413) }))
+// cap every request body before it is buffered: the largest legitimate body is a 2 MB file plus
+// its multipart framing, hence the 64 KB margin (the file itself is still checked against MAX_UPLOAD)
+app.use('*', bodyLimit({ maxSize: MAX_UPLOAD + 64 * 1024, onError: (c) => c.json({ error: 'File is larger than 2 MB.' }, 413) }))
 
 // tiny per-IP limiter for login attempts
 const attempts = new Map<string, { n: number; until: number }>()

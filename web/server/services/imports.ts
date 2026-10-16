@@ -163,7 +163,8 @@ export async function import835(db: Db, text: string, userId: number | null, fil
           await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'status', body: { from: d.status, to: 'resolved', recovered: c.paid, auto: true } })
           result.resolved++
         } else {
-          await tx.update(denials).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(denials.id, d.id))
+          // a partial payment still counts toward what was recovered
+          await tx.update(denials).set({ status: 'in_progress', recovered: r2(d.recovered + c.paid), updatedAt: new Date() }).where(eq(denials.id, d.id))
           await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'note', body: { text: `Denied again on ${deniedOn} (${denialAdj.map((a) => `${a.group}-${a.reason}`).join(', ')})${c.paid > 0 ? `; $${c.paid.toFixed(2)} paid` : ''}.`, auto: true } })
         }
         continue
