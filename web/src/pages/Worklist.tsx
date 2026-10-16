@@ -309,7 +309,7 @@ function DetailPanel({ id, users, onChange, mobileOpen }: { id: number; users: L
             style={{ marginTop: 10, flexWrap: 'nowrap' }}
             onSubmit={(e) => {
               e.preventDefault()
-              if (note.trim()) act(() => api(`/denials/${id}/notes`, { method: 'POST', json: { text: note } })).then(() => setNote(''))
+              if (note.trim()) act(() => api(`/denials/${id}/notes`, { method: 'POST', json: { text: note } }).then(() => setNote('')))
             }}
           >
             <input className="grow" placeholder="Add a note" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Note" maxLength={2000} />

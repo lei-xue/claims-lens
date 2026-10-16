@@ -58,6 +58,7 @@ export type Claim837 = {
   memberId: string
   patient: string
   payer: string
+  payerId: string
   segment: number
 }
 export type Submission = {
@@ -205,6 +206,7 @@ function read837(segs: Segment[], d: Delims, issues: Issue[], loops: Record<numb
   let memberId = ''
   let patient = ''
   let payer = ''
+  let payerId = ''
   let claim: Claim837 | null = null
   let line: ClaimLine | null = null
   for (const s of segs) {
@@ -229,6 +231,7 @@ function read837(segs: Segment[], d: Delims, issues: Issue[], loops: Record<numb
     } else if (s.id === 'NM1' && el(s, 1) === 'PR') {
       loop = '2010BB Payer'
       payer = el(s, 3)
+      payerId = el(s, 9)
     } else if (s.id === 'NM1' && el(s, 1) === 'QC') {
       loop = '2010CA Patient'
       patient = name(s)
@@ -238,7 +241,7 @@ function read837(segs: Segment[], d: Delims, issues: Issue[], loops: Record<numb
       const pos = el(s, 5)
       claim = {
         patientControl: el(s, 1), charge: num(el(s, 2)), pos: comp(pos, d, 1), frequency: comp(pos, d, 3),
-        diagnoses: [], lines: [], subscriber, memberId, patient, payer, segment: s.index,
+        diagnoses: [], lines: [], subscriber, memberId, patient, payer, payerId, segment: s.index,
       }
       sub.claims.push(claim)
     } else if (s.id === 'HI' && claim) {

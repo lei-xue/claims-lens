@@ -28,6 +28,11 @@ async function load(db: Db, id: number) {
   return d
 }
 
+// resubmit / appeal move the denial too, so they follow the same table (a closed denial must be reopened first)
+function checkMove(from: Status, to: Status) {
+  if (from !== to && !NEXT[from].includes(to)) throw new WorkflowError(`Cannot move from ${from} to ${to}`)
+}
+
 export async function assign(db: Db, id: number, ownerId: number | null, actor: number) {
   const d = await load(db, id)
   if (ownerId) {
@@ -65,6 +70,7 @@ export async function addNote(db: Db, id: number, text: string, actor: number) {
 /** Corrected claim: a frequency-7 837P referencing the payer's claim number (REF*F8). */
 export async function correctedClaim(db: Db, id: number, actor: number, edits: { lineId: number; modifiers?: string[]; procedure?: string }[] = []) {
   const d = await load(db, id)
+  checkMove(d.status, 'resubmitted')
   if (!d.claimId) throw new WorkflowError('This denial is not matched to a submitted claim')
   const [c] = await db.select().from(claims).where(eq(claims.id, d.claimId))
   const lines = await db.select().from(claimLines).where(eq(claimLines.claimId, c.id)).orderBy(claimLines.lineNo)
@@ -126,6 +132,7 @@ function build837Corrected(c: typeof claims.$inferSelect, lines: (typeof claimLi
 /** Appeal letter drafted from the denial, the claim and the code explanation. */
 export async function draftAppeal(db: Db, id: number, actor: number, extra = '') {
   const d = await load(db, id)
+  checkMove(d.status, 'appealed')
   const [c] = d.claimId ? await db.select().from(claims).where(eq(claims.id, d.claimId)) : []
   const [cp] = await db.select().from(claimPayments).where(eq(claimPayments.id, d.claimPaymentId))
   const [payer] = d.payerId ? await db.select().from(payers).where(eq(payers.id, d.payerId)) : []

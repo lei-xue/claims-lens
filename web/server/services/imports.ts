@@ -1,6 +1,6 @@
 // Importing 837P claims and 835 remittances: parse with the same library the browser uses,
 // store everything, match remittances back to submitted claims and open denial work items.
-import { and, desc, eq, notInArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, notInArray } from 'drizzle-orm'
 import { interpret, type Remit, type Submission } from '../../src/lib/interpret'
 import { schema, type Db, type Tx } from '../db'
 import { appealWindowDays, categoryOf, isDenial } from './codes'
@@ -25,18 +25,21 @@ async function upsertPayer(tx: Tx, code: string, name: string) {
 export type ClaimImportResult = { claims: number; duplicates: number; issues: { level: string; message: string }[] }
 
 export async function import837(db: Db, text: string, userId: number | null): Promise<ClaimImportResult> {
-  const r = interpret(text)
+  let r
+  try {
+    r = interpret(text)
+  } catch (e) {
+    throw new ImportError((e as Error).message)
+  }
   if (r.doc?.type !== '837P') throw new ImportError('This file is not an 837P professional claim.')
   const errors = r.issues.filter((i) => i.level === 'error')
   if (errors.length) throw new ImportError(`The 837P has ${errors.length} error(s): ${errors[0].message}`)
   const doc = r.doc as Submission
-  // NM1*PR carries the payer id in NM109; interpret() keeps the name, so read ids from segments
-  const payerIds = r.segments.filter((s) => s.id === 'NM1' && s.elements[0] === 'PR').map((s) => s.elements[8])
   let inserted = 0
   let duplicates = 0
   await db.transaction(async (tx) => {
-    for (const [i, c] of doc.claims.entries()) {
-      const payer = await upsertPayer(tx, payerIds[i] ?? '', c.payer)
+    for (const c of doc.claims) {
+      const payer = await upsertPayer(tx, c.payerId, c.payer)
       const date = c.lines.find((l) => l.date)?.date
       const [row] = await tx
         .insert(claims)
@@ -146,20 +149,23 @@ export async function import835(db: Db, text: string, userId: number | null, fil
         body: { remittanceId: remit.id, payer: payer.name, paid: c.paid, status: c.status, trace: doc.trace },
       })
 
-      // A claim we were already working: does this remittance resolve it?
+      // A claim we were already working (on any submission of it): does this remittance resolve it?
+      const submissions = tx.select({ id: claims.id }).from(claims).where(eq(claims.patientControl, c.patientControl))
       const open = claim
-        ? await tx.select().from(denials).where(and(eq(denials.claimId, claim.id), notInArray(denials.status, ['resolved', 'written_off']))).limit(1)
+        ? await tx.select().from(denials).where(and(inArray(denials.claimId, submissions), notInArray(denials.status, ['resolved', 'written_off']))).orderBy(desc(denials.id)).limit(1)
         : []
       if (open.length) {
         const d = open[0]
-        if (!denialAdj.length || c.paid > 0) {
+        // only a remittance with no denial adjustments left closes the work item
+        if (!denialAdj.length) {
           const recovered = r2(d.recovered + c.paid)
           await tx.update(denials).set({ status: 'resolved', recovered, resolvedAt: new Date(), updatedAt: new Date() }).where(eq(denials.id, d.id))
           await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'status', body: { from: d.status, to: 'resolved', recovered: c.paid, auto: true } })
           result.resolved++
         } else {
-          await tx.update(denials).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(denials.id, d.id))
-          await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'note', body: { text: `Denied again on ${deniedOn} (${denialAdj.map((a) => `${a.group}-${a.reason}`).join(', ')}).`, auto: true } })
+          // a partial payment still counts toward what was recovered
+          await tx.update(denials).set({ status: 'in_progress', recovered: r2(d.recovered + c.paid), updatedAt: new Date() }).where(eq(denials.id, d.id))
+          await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'note', body: { text: `Denied again on ${deniedOn} (${denialAdj.map((a) => `${a.group}-${a.reason}`).join(', ')})${c.paid > 0 ? `; $${c.paid.toFixed(2)} paid` : ''}.`, auto: true } })
         }
         continue
       }
