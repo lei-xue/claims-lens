@@ -119,7 +119,9 @@ export default function Inspect() {
             </div>
             {view === 'summary' ? (
               <div className="pad">
-                {res.r.doc?.type === '835' ? <RemitView d={res.r.doc} /> : res.r.doc?.type === '837P' ? <ClaimView d={res.r.doc} /> : <div className="empty">Unsupported transaction — see the Segments tab.</div>}
+                {(res.r.transactions.length ? res.r.transactions : [{ doc: null }]).map(({ doc }, k) =>
+                  doc?.type === '835' ? <RemitView key={k} d={doc} /> : doc?.type === '837P' ? <ClaimView key={k} d={doc} /> : <div key={k} className="empty">Unsupported transaction — see the Segments tab.</div>,
+                )}
               </div>
             ) : (
               <SegmentView r={res.r} flagged={flagged} />

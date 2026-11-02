@@ -68,10 +68,16 @@ export type Submission = {
   claims: Claim837[]
 }
 
+/** One ST…SE transaction set: an 835 is one payment from one payer, so a file can hold several. */
+export type Transaction = { doc: Remit | Submission | null; issues: Issue[] }
+
 export type Result = {
   delims: Delims
   segments: Segment[]
+  /** the first transaction's document (most files carry exactly one) */
   doc: Remit | Submission | null
+  /** every transaction set in the file, in order */
+  transactions: Transaction[]
   issues: Issue[]
   /** segment index → loop label, for the raw view */
   loops: Record<number, string>
@@ -90,22 +96,39 @@ function casAdjustments(s: Segment): Adjustment[] {
   return out
 }
 
-function envelopeChecks(segs: Segment[], issues: Issue[]) {
-  const st = segs.findIndex((s) => s.id === 'ST')
-  const se = segs.findIndex((s) => s.id === 'SE')
-  if (st < 0 || se < 0) {
-    issues.push({ level: 'error', message: 'Missing ST or SE segment.' })
+/** ST/SE pairing and counts for one transaction set (segs = its ST … SE). */
+function transactionChecks(segs: Segment[], issues: Issue[]) {
+  const st = segs[0]
+  const se = segs.at(-1)
+  if (!st || st.id !== 'ST' || !se || se.id !== 'SE') {
+    issues.push({ level: 'error', message: 'Missing ST or SE segment.', segment: st?.index })
     return
   }
-  const count = se - st + 1
-  if (num(el(segs[se], 1)) !== count)
-    issues.push({ level: 'error', message: `SE01 says ${el(segs[se], 1)} segments but the transaction has ${count}.`, segment: se })
-  if (el(segs[st], 2) !== el(segs[se], 2))
-    issues.push({ level: 'error', message: `ST02 control number ${el(segs[st], 2)} does not match SE02 ${el(segs[se], 2)}.`, segment: se })
+  if (num(el(se, 1)) !== segs.length)
+    issues.push({ level: 'error', message: `SE01 says ${el(se, 1)} segments but the transaction has ${segs.length}.`, segment: se.index })
+  if (el(st, 2) !== el(se, 2))
+    issues.push({ level: 'error', message: `ST02 control number ${el(st, 2)} does not match SE02 ${el(se, 2)}.`, segment: se.index })
+}
+
+function interchangeChecks(segs: Segment[], issues: Issue[]) {
   const isa = segs.find((s) => s.id === 'ISA')
   const iea = segs.find((s) => s.id === 'IEA')
   if (isa && iea && el(isa, 13) !== el(iea, 2))
     issues.push({ level: 'error', message: `ISA13 control number does not match IEA02.`, segment: iea.index })
+}
+
+/** Split the segments into ST … SE transaction sets (an unterminated one runs to the next ST or the end). */
+function splitTransactions(segs: Segment[]): Segment[][] {
+  const out: Segment[][] = []
+  let cur: Segment[] | null = null
+  for (const s of segs) {
+    if (s.id === 'ST') out.push((cur = [s]))
+    else if (cur) {
+      cur.push(s)
+      if (s.id === 'SE') cur = null
+    }
+  }
+  return out
 }
 
 function read835(segs: Segment[], d: Delims, issues: Issue[], loops: Record<number, string>): Remit {
@@ -280,11 +303,38 @@ export function interpret(text: string): Result {
   const { delims, segments } = parse(text)
   const issues: Issue[] = []
   const loops: Record<number, string> = {}
-  envelopeChecks(segments, issues)
-  const st = segments.find((s) => s.id === 'ST')
-  let doc: Remit | Submission | null = null
-  if (el(st, 1) === '835') doc = read835(segments, delims, issues, loops)
-  else if (el(st, 1) === '837') doc = read837(segments, delims, issues, loops)
-  else issues.push({ level: 'warning', message: `Transaction set ${el(st, 1) || '(none)'} is not supported — showing raw segments only.` })
-  return { delims, segments, doc, issues, loops }
+  interchangeChecks(segments, issues)
+  const sets = splitTransactions(segments)
+  if (!sets.length) {
+    issues.push({ level: 'error', message: 'Missing ST or SE segment.' })
+    issues.push({ level: 'warning', message: 'Transaction set (none) is not supported — showing raw segments only.' })
+  }
+  const transactions: Transaction[] = sets.map((segs) => {
+    const own: Issue[] = []
+    transactionChecks(segs, own)
+    const type = el(segs[0], 1)
+    let doc: Remit | Submission | null = null
+    if (type === '835') doc = read835(segs, delims, own, loops)
+    else if (type === '837') doc = read837(segs, delims, own, loops)
+    else {
+      own.push({ level: 'warning', message: `Transaction set ${type || '(none)'} is not supported — showing raw segments only.`, segment: segs[0].index })
+      for (const s of segs) loops[s.index] = ''
+    }
+    issues.push(...own)
+    return { doc, issues: own }
+  })
+  // envelope segments outside any transaction set
+  const firstSt = segments.findIndex((s) => s.id === 'ST')
+  if (firstSt >= 0) for (const s of segments) if (loops[s.index] === undefined) loops[s.index] = s.index < firstSt || s.id === 'ISA' || s.id === 'GS' ? 'Header' : 'Trailer'
+  return { delims, segments, doc: transactions[0]?.doc ?? null, transactions, issues, loops }
+}
+
+/** The transaction set a file carries (ST01 of its first ST), read with the file's own delimiters. */
+export function transactionType(text: string): string | null {
+  try {
+    const st = parse(text).segments.find((s) => s.id === 'ST')
+    return el(st, 1) || null
+  } catch {
+    return null
+  }
 }

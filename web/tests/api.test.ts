@@ -6,6 +6,7 @@ import { closeDb, getDb, schema } from '../server/db'
 import { seed, DEMO_PASSWORD } from '../server/seed'
 import { import835 } from '../server/services/imports'
 import { makeClaim, PAYERS, to835, to837 } from '../src/lib/generate'
+import { claim837, interchange, remit835, remitBody } from './fixtures'
 
 let cookie = ''
 const call = (path: string, init: RequestInit = {}) =>
@@ -156,5 +157,26 @@ describe('imports', () => {
     expect((await upload('/api/import/837', 'not an X12 file')).status).toBe(400)
     expect((await upload('/api/import/835', 'x'.repeat(2_000_001))).status).toBe(413)
     expect((await post('/api/auth/login', { email: 'dana@demo.claimslens.dev', password: 'x'.repeat(2_100_000) })).status).toBe(413)
+  })
+})
+
+describe('remittance files with several transactions', () => {
+  it('creates one remittance per ST/SE transaction', async () => {
+    await upload('/api/import/837', claim837('MULTI1', [
+      { pcn: 'TESTMULTI1', payerId: 'AAA01', payerName: 'ALPHA PLAN', lines: [{ code: '99213', charge: 100 }] },
+      { pcn: 'TESTMULTI2', payerId: 'BBB02', payerName: 'BETA PLAN', lines: [{ code: '99214', charge: 200 }] },
+    ]))
+    const text = interchange('835', [
+      remitBody({ payerId: 'AAA01', payerName: 'ALPHA PLAN', trace: 'TMULTIA', claims: [{ pcn: 'TESTMULTI1', status: '1', charge: 100, paid: 70, cas: ['CO*45*30'] }] }),
+      remitBody({ payerId: 'BBB02', payerName: 'BETA PLAN', trace: 'TMULTIB', claims: [{ pcn: 'TESTMULTI2', status: '4', charge: 200, paid: 0, cas: ['CO*197*200'] }] }),
+    ], { ctrl: 4711 })
+    const res = await (await upload('/api/import/835', text)).json()
+    expect(res).toMatchObject({ claims: 2, matched: 2, newDenials: 1, payment: 70 })
+    expect(res.remittances.map((x: { trace: string; payment: number }) => [x.trace, x.payment])).toEqual([['TMULTIA', 70], ['TMULTIB', 0]])
+    const { remittances, payers } = schema
+    const rows = await getDb().select({ trace: remittances.trace, amount: remittances.paymentAmount, payer: payers.code }).from(remittances).innerJoin(payers, eq(payers.id, remittances.payerId)).where(inArray(remittances.trace, ['TMULTIA', 'TMULTIB'])).orderBy(remittances.trace)
+    expect(rows).toEqual([{ trace: 'TMULTIA', amount: 70, payer: 'AAA01' }, { trace: 'TMULTIB', amount: 0, payer: 'BBB02' }])
+    // the whole file is refused if it was already imported
+    expect((await upload('/api/import/835', text)).status).toBe(409)
   })
 })
