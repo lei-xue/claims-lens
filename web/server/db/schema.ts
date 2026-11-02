@@ -41,9 +41,16 @@ export const claims = pgTable(
     diagnoses: text('diagnoses').array().notNull().default(sql`'{}'`),
     totalCharge: money('total_charge').notNull(),
     frequency: text('frequency').notNull().default('1'),
+    /** the 837 batch it came in (BHT03), which tells one corrected claim (frequency 7) from the next */
+    sourceRef: text('source_ref').notNull().default(''),
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('claims_pcn_freq').on(t.patientControl, t.frequency)],
+  // a claim is "already on file" per patient control number, payer and frequency; corrected claims
+  // can be sent more than once, so each frequency-7 submission is told apart by its batch
+  (t) => [
+    uniqueIndex('claims_pcn_payer_freq').on(t.patientControl, t.payerId, t.frequency).where(sql`frequency <> '7'`),
+    uniqueIndex('claims_pcn_payer_correction').on(t.patientControl, t.payerId, t.sourceRef).where(sql`frequency = '7'`),
+  ],
 )
 
 export const claimLines = pgTable('claim_lines', {

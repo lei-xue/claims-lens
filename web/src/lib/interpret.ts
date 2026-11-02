@@ -63,6 +63,8 @@ export type Claim837 = {
 }
 export type Submission = {
   type: '837P'
+  /** BHT03, the submitter's reference for this batch (ST02 when absent) */
+  reference: string
   submitter: string
   billing: { name: string; npi: string; taxId: string }
   claims: Claim837[]
@@ -222,7 +224,7 @@ function read835(segs: Segment[], d: Delims, issues: Issue[], loops: Record<numb
 }
 
 function read837(segs: Segment[], d: Delims, issues: Issue[], loops: Record<number, string>): Submission {
-  const sub: Submission = { type: '837P', submitter: '', billing: { name: '', npi: '', taxId: '' }, claims: [] }
+  const sub: Submission = { type: '837P', reference: el(segs.find((s) => s.id === 'BHT'), 3) || el(segs.find((s) => s.id === 'ST'), 2), submitter: '', billing: { name: '', npi: '', taxId: '' }, claims: [] }
   let loop = 'Header'
   let hl = ''
   let subscriber = ''

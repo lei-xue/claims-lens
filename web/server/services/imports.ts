@@ -1,6 +1,6 @@
 // Importing 837P claims and 835 remittances: parse with the same library the browser uses,
 // store everything, match remittances back to submitted claims and open denial work items.
-import { and, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm'
 import { interpret, type Remit, type Submission } from '../../src/lib/interpret'
 import { schema, type Db, type Tx } from '../db'
 import { appealWindowDays, categoryOf, isDenial } from './codes'
@@ -38,7 +38,7 @@ export async function import837(db: Db, text: string, userId: number | null): Pr
   let inserted = 0
   let duplicates = 0
   await db.transaction(async (tx) => {
-    for (const c of docs.flatMap((d) => d.claims)) {
+    for (const [doc, c] of docs.flatMap((d) => d.claims.map((c) => [d, c] as const))) {
       const payer = await upsertPayer(tx, c.payerId, c.payer)
       const date = c.lines.find((l) => l.date)?.date
       const [row] = await tx
@@ -46,7 +46,7 @@ export async function import837(db: Db, text: string, userId: number | null): Pr
         .values({
           patientControl: c.patientControl, payerId: payer.id, patientName: c.patient, memberId: c.memberId,
           serviceDate: date ? isoDate(date) : new Date().toISOString().slice(0, 10), pos: c.pos,
-          diagnoses: c.diagnoses.map((d) => d.code), totalCharge: c.charge, frequency: c.frequency || '1',
+          diagnoses: c.diagnoses.map((d) => d.code), totalCharge: c.charge, frequency: c.frequency || '1', sourceRef: doc.reference,
         })
         .onConflictDoNothing()
         .returning()
@@ -148,8 +148,9 @@ async function importRemit(tx: Tx, doc: Remit, issues: { level: string; message:
   const appealBy = new Date(Date.parse(deniedOn) + appealWindowDays(payer.name) * 86400000).toISOString().slice(0, 10)
 
   for (const c of doc.claims) {
-    // newest submission of this claim (a corrected claim, frequency 7, wins)
-    const [claim] = await tx.select().from(claims).where(eq(claims.patientControl, c.patientControl)).orderBy(desc(claims.submittedAt), desc(claims.id)).limit(1)
+    // newest submission of this claim to this payer (a corrected claim, frequency 7, wins); any payer if none
+    const [claim] = await tx.select().from(claims).where(eq(claims.patientControl, c.patientControl))
+      .orderBy(sql`(${claims.payerId} = ${payer.id}) desc nulls last`, desc(claims.submittedAt), desc(claims.id)).limit(1)
     if (claim) result.matched++
     else result.unmatched.push(c.patientControl)
     const lines = claim ? await tx.select().from(claimLines).where(eq(claimLines.claimId, claim.id)).orderBy(claimLines.lineNo) : []

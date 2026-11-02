@@ -248,3 +248,31 @@ describe('closing the loop on later remittances', () => {
     expect(await denialOf(pcn)).toEqual([])
   })
 })
+
+describe('claims already on file', () => {
+  const lines = [{ code: '99213', charge: 120 }]
+  const A = { payerId: 'AAA01', payerName: 'ALPHA PLAN' }
+  const B = { payerId: 'BBB02', payerName: 'BETA PLAN' }
+
+  it('keeps a rebill of the same patient control number to another payer', async () => {
+    const pcn = 'TESTREBILL1'
+    expect(await (await upload('/api/import/837', claim837('RB1', [{ pcn, ...A, lines }]))).json()).toMatchObject({ claims: 1, duplicates: 0 })
+    expect(await (await upload('/api/import/837', claim837('RB1', [{ pcn, ...A, lines }]))).json()).toMatchObject({ claims: 0, duplicates: 1 })
+    expect(await (await upload('/api/import/837', claim837('RB2', [{ pcn, ...B, lines }]))).json()).toMatchObject({ claims: 1, duplicates: 0 })
+    // a remittance from payer A is matched to the claim billed to payer A
+    await upload('/api/import/835', remit835({ ...A, trace: 'TRB1', claims: [{ pcn, status: '4', charge: 120, paid: 0, cas: ['CO*22*120'] }] }))
+    const { claims, claimPayments, payers } = schema
+    const [m] = await getDb().select({ payer: payers.code }).from(claimPayments).innerJoin(claims, eq(claims.id, claimPayments.claimId)).innerJoin(payers, eq(payers.id, claims.payerId)).where(eq(claimPayments.patientControl, pcn))
+    expect(m.payer).toBe('AAA01')
+  })
+
+  it('keeps every corrected claim (frequency 7), but not the same one twice', async () => {
+    const pcn = 'TESTCORR2'
+    await upload('/api/import/837', claim837('CR0', [{ pcn, ...A, lines }]))
+    expect(await (await upload('/api/import/837', claim837('CR1', [{ pcn, ...A, freq: '7', lines }]))).json()).toMatchObject({ claims: 1, duplicates: 0 })
+    expect(await (await upload('/api/import/837', claim837('CR2', [{ pcn, ...A, freq: '7', lines }]))).json()).toMatchObject({ claims: 1, duplicates: 0 })
+    expect(await (await upload('/api/import/837', claim837('CR2', [{ pcn, ...A, freq: '7', lines }]))).json()).toMatchObject({ claims: 0, duplicates: 1 })
+    const rows = await getDb().select({ f: schema.claims.frequency }).from(schema.claims).where(eq(schema.claims.patientControl, pcn))
+    expect(rows.map((r) => r.f).sort()).toEqual(['1', '7', '7'])
+  })
+})
