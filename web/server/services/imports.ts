@@ -1,6 +1,6 @@
 // Importing 837P claims and 835 remittances: parse with the same library the browser uses,
 // store everything, match remittances back to submitted claims and open denial work items.
-import { and, desc, eq, inArray, notInArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm'
 import { interpret, type Remit, type Submission } from '../../src/lib/interpret'
 import { schema, type Db, type Tx } from '../db'
 import { appealWindowDays, categoryOf, isDenial } from './codes'
@@ -55,16 +55,41 @@ export async function import837(db: Db, text: string, userId: number | null): Pr
         continue
       }
       inserted++
-      await tx.insert(claimLines).values(
+      const lines = await tx.insert(claimLines).values(
         c.lines.map((l, n) => ({
           claimId: row.id, lineNo: n + 1, procedure: l.procedure, modifiers: l.modifiers, charge: l.charge,
           units: Number(l.units) || 1, dxPointers: l.pointers.map(Number),
         })),
-      )
+      ).returning()
       await tx.insert(activities).values({ claimId: row.id, userId, kind: c.frequency === '7' ? 'resubmitted' : 'submitted', body: { charge: c.charge } })
+      await linkOrphans(tx, row.id, c.patientControl, lines)
     }
   })
   return { claims: inserted, duplicates, issues: r.issues }
+}
+
+type Line = typeof claimLines.$inferSelect
+/** The submitted line an SVC paid: same procedure and modifiers first, else same procedure. */
+function matchLine(lines: Line[], used: Set<number>, s: { procedure: string; modifiers: string[] }) {
+  const line = lines.find((l) => !used.has(l.id) && l.procedure === s.procedure && l.modifiers.join() === s.modifiers.join()) ?? lines.find((l) => !used.has(l.id) && l.procedure === s.procedure)
+  if (line) used.add(line.id)
+  return line
+}
+
+/** Remittances that arrived before their 837 was imported: attach their payments and denials to the claim. */
+async function linkOrphans(tx: Tx, claimId: number, patientControl: string, lines: Line[]) {
+  const cps = await tx.update(claimPayments).set({ claimId }).where(and(eq(claimPayments.patientControl, patientControl), isNull(claimPayments.claimId))).returning({ id: claimPayments.id })
+  if (!cps.length) return
+  const ids = cps.map((x) => x.id)
+  for (const id of ids) {
+    const used = new Set<number>()
+    for (const lp of await tx.select().from(linePayments).where(and(eq(linePayments.claimPaymentId, id), isNull(linePayments.claimLineId))).orderBy(linePayments.id)) {
+      const line = matchLine(lines, used, lp)
+      if (line) await tx.update(linePayments).set({ claimLineId: line.id }).where(eq(linePayments.id, lp.id))
+    }
+  }
+  const ds = await tx.update(denials).set({ claimId }).where(and(inArray(denials.claimPaymentId, ids), isNull(denials.claimId))).returning({ id: denials.id })
+  if (ds.length) await tx.update(activities).set({ claimId }).where(and(inArray(activities.denialId, ds.map((d) => d.id)), isNull(activities.claimId)))
 }
 
 export type RemitImportResult = {
@@ -148,8 +173,7 @@ async function importRemit(tx: Tx, doc: Remit, issues: { level: string; message:
     }
     const used = new Set<number>()
     for (const s of c.services) {
-      const line = lines.find((l) => !used.has(l.id) && l.procedure === s.procedure && l.modifiers.join() === s.modifiers.join()) ?? lines.find((l) => !used.has(l.id) && l.procedure === s.procedure)
-      if (line) used.add(line.id)
+      const line = matchLine(lines, used, s)
       const [lp] = await tx
         .insert(linePayments)
         .values({
@@ -168,22 +192,22 @@ async function importRemit(tx: Tx, doc: Remit, issues: { level: string; message:
       body: { remittanceId: remit.id, payer: payer.name, paid: c.paid, status: c.status, trace: doc.trace },
     })
 
-    // A claim we were already working (on any submission of it): does this remittance resolve it?
-    const submissions = tx.select({ id: claims.id }).from(claims).where(eq(claims.patientControl, c.patientControl))
-    const open = claim
-      ? await tx.select().from(denials).where(and(inArray(denials.claimId, submissions), notInArray(denials.status, ['resolved', 'written_off']))).orderBy(desc(denials.id)).limit(1)
-      : []
+    // A claim we were already working (on any submission of it, or before its 837 was on file —
+    // found by patient control number): does this remittance resolve it?
+    const samePcn = tx.select({ id: claimPayments.id }).from(claimPayments).where(eq(claimPayments.patientControl, c.patientControl))
+    const open = await tx.select().from(denials).where(and(inArray(denials.claimPaymentId, samePcn), notInArray(denials.status, ['resolved', 'written_off']))).orderBy(desc(denials.id)).limit(1)
     if (open.length) {
       const d = open[0]
+      if (claim && !d.claimId) await tx.update(denials).set({ claimId: claim.id }).where(eq(denials.id, d.id))
       const code = (a: { group: string; reason: string }) => `${a.group}-${a.reason}`
       if (reversal) {
         // the payer took back an earlier payment; the next CLP for the claim says what happens now
-        await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'note', body: { text: `Payer reversed an earlier adjudication on ${deniedOn}${c.paid ? ` ($${c.paid.toFixed(2)})` : ''}.`, auto: true } })
+        await tx.insert(activities).values({ denialId: d.id, claimId: claim?.id ?? d.claimId, userId, kind: 'note', body: { text: `Payer reversed an earlier adjudication on ${deniedOn}${c.paid ? ` ($${c.paid.toFixed(2)})` : ''}.`, auto: true } })
       } else if (['1', '2', '3'].includes(c.status) && c.paid > 0 && !denialAdj.length) {
         // processed and paid with no denial adjustments left: the work item is done
         const recovered = r2(d.recovered + c.paid)
         await tx.update(denials).set({ status: 'resolved', recovered, resolvedAt: new Date(), updatedAt: new Date() }).where(eq(denials.id, d.id))
-        await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'status', body: { from: d.status, to: 'resolved', recovered: c.paid, auto: true } })
+        await tx.insert(activities).values({ denialId: d.id, claimId: claim?.id ?? d.claimId, userId, kind: 'status', body: { from: d.status, to: 'resolved', recovered: c.paid, auto: true } })
         result.resolved++
       } else {
         // denied again (CLP02 4 or a new denial adjustment), or processed with nothing paid: still open.
@@ -192,7 +216,7 @@ async function importRemit(tx: Tx, doc: Remit, issues: { level: string; message:
         const codes = c.status === '4' || denialAdj.length ? [...new Set([...d.codes, ...shown.map(code)])] : d.codes
         await tx.update(denials).set({ status: 'in_progress', codes, recovered: r2(d.recovered + Math.max(c.paid, 0)), updatedAt: new Date() }).where(eq(denials.id, d.id))
         const what = c.status === '4' || denialAdj.length ? 'Denied again' : 'Processed with no payment'
-        await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'note', body: { text: `${what} on ${deniedOn}${shown.length ? ` (${shown.map(code).join(', ')})` : ''}${c.paid > 0 ? `; $${c.paid.toFixed(2)} paid` : ''}.`, auto: true } })
+        await tx.insert(activities).values({ denialId: d.id, claimId: claim?.id ?? d.claimId, userId, kind: 'note', body: { text: `${what} on ${deniedOn}${shown.length ? ` (${shown.map(code).join(', ')})` : ''}${c.paid > 0 ? `; $${c.paid.toFixed(2)} paid` : ''}.`, auto: true } })
       }
       continue
     }

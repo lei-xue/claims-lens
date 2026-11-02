@@ -16,9 +16,9 @@ export function interchange(st: '835' | '837', bodies: string[][], opts: { ctrl?
   return opts.element ? text.replaceAll('*', opts.element) : text
 }
 
-export type ClpSpec = { pcn: string; status: string; charge: number; paid: number; pr?: number; payerClaim?: string; cas?: string[] }
+export type ClpSpec = { pcn: string; status: string; charge: number; paid: number; pr?: number; payerClaim?: string; cas?: string[]; segments?: string[] }
 
-/** One 835 transaction body: one payment from one payer, claim-level adjustments only. */
+/** One 835 transaction body: one payment from one payer; extra segments (SVC, CAS…) go after each CLP. */
 export function remitBody(p: { payerId: string; payerName: string; trace: string; date?: string; claims: ClpSpec[] }) {
   const date = p.date ?? '20261102'
   const total = p.claims.reduce((a, c) => a + c.paid, 0)
@@ -33,6 +33,7 @@ export function remitBody(p: { payerId: string; payerName: string; trace: string
       `CLP*${c.pcn}*${c.status}*${fmt(c.charge)}*${fmt(c.paid)}*${fmt(c.pr ?? 0)}*12*${c.payerClaim ?? 'PCL' + c.pcn}*11*1`,
       `NM1*QC*1*TESTER*AVA****MI*M123`,
       ...(c.cas ?? []).map((x) => `CAS*${x}`),
+      ...(c.segments ?? []),
     ]),
   ]
 }

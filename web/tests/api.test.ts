@@ -210,6 +210,36 @@ describe('closing the loop on later remittances', () => {
     expect(await denialOf(pcn)).toMatchObject([{ status: 'resolved', recovered: 80 }])
   })
 
+  it('tracks a denial that arrived before its 837 and links it once the claim is imported', async () => {
+    const pcn = 'TESTORPHAN1'
+    const deny = (trace: string) => remit835({ ...payer, trace, claims: [{ pcn, status: '4', charge: 150, paid: 0, segments: ['SVC*HC:99214*150*0**1', 'CAS*CO*197*150'] }] })
+    const r1 = await (await upload('/api/import/835', deny('TORPH1'))).json()
+    expect(r1).toMatchObject({ newDenials: 1, unmatched: [pcn] })
+    // the payer denies it again before the 837 is on file: same work item, no duplicate
+    expect((await (await upload('/api/import/835', deny('TORPH2'))).json()).newDenials).toBe(0)
+    expect(await denialOf(pcn)).toMatchObject([{ status: 'in_progress', claimId: null }])
+    // importing the claim links the orphan payments and the denial to it
+    await upload('/api/import/837', claim837('ORPH1', [{ pcn, ...payer, lines: [{ code: '99214', charge: 150 }] }]))
+    const [claim] = await getDb().select().from(schema.claims).where(eq(schema.claims.patientControl, pcn))
+    const [d] = await denialOf(pcn)
+    expect(d.claimId).toBe(claim.id)
+    const cps = await getDb().select({ claimId: schema.claimPayments.claimId }).from(schema.claimPayments).where(eq(schema.claimPayments.patientControl, pcn))
+    expect(cps.map((x) => x.claimId)).toEqual([claim.id, claim.id])
+    expect((await (await call(`/api/denials/${d.id}`)).json()).recon).toMatchObject([{ procedure: '99214', missing: false, paid: 0, adjustments: [{ group: 'CO', reason: '197', amount: 150 }] }])
+    // and the payment that follows resolves it
+    const r3 = await (await upload('/api/import/835', remit835({ ...payer, trace: 'TORPH3', claims: [{ pcn, status: '1', charge: 150, paid: 90, cas: ['CO*45*60'] }] }))).json()
+    expect(r3.resolved).toBe(1)
+    expect(await denialOf(pcn)).toMatchObject([{ status: 'resolved', recovered: 90 }])
+  })
+
+  it('resolves an orphan denial when the claim is paid even if its 837 never arrives', async () => {
+    const pcn = 'TESTORPHAN2'
+    await upload('/api/import/835', remit835({ ...payer, trace: 'TORPH21', claims: [{ pcn, status: '4', charge: 150, paid: 0, cas: ['CO*16*150'] }] }))
+    const r = await (await upload('/api/import/835', remit835({ ...payer, trace: 'TORPH22', claims: [{ pcn, status: '1', charge: 150, paid: 90, cas: ['CO*45*60'] }] }))).json()
+    expect(r.resolved).toBe(1)
+    expect(await denialOf(pcn)).toMatchObject([{ status: 'resolved', recovered: 90 }])
+  })
+
   it('does not open a work item for a reversal with negative denial adjustments', async () => {
     const pcn = 'TESTREV1'
     await upload('/api/import/837', claim837('REV1', [{ pcn, ...payer, lines: [{ code: '99214', charge: 200 }] }]))
