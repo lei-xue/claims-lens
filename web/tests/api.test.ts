@@ -218,6 +218,8 @@ describe('closing the loop on later remittances', () => {
     // the payer denies it again before the 837 is on file: same work item, no duplicate
     expect((await (await upload('/api/import/835', deny('TORPH2'))).json()).newDenials).toBe(0)
     expect(await denialOf(pcn)).toMatchObject([{ status: 'in_progress', claimId: null }])
+    // and it can be found in the work queue by its patient control number
+    expect((await (await call(`/api/denials?q=${pcn}`)).json()).rows).toMatchObject([{ patientControl: pcn }])
     // importing the claim links the orphan payments and the denial to it
     await upload('/api/import/837', claim837('ORPH1', [{ pcn, ...payer, lines: [{ code: '99214', charge: 150 }] }]))
     const [claim] = await getDb().select().from(schema.claims).where(eq(schema.claims.patientControl, pcn))
@@ -286,5 +288,35 @@ describe('837 service units', () => {
     const { claims, claimLines } = schema
     const rows = await getDb().select({ units: claimLines.units }).from(claimLines).innerJoin(claims, eq(claims.id, claimLines.claimId)).where(eq(claims.patientControl, pcn)).orderBy(claimLines.lineNo)
     expect(rows.map((r) => r.units)).toEqual([1.5, 1])
+  })
+})
+
+describe('worklist filters and paging', () => {
+  it('shows written-off denials under the closed filter', async () => {
+    const list = await (await call('/api/denials?status=new')).json()
+    const id = list.rows.find((r: { amount: number }) => r.amount <= 500).id
+    expect((await post(`/api/denials/${id}/status`, { status: 'written_off' })).status).toBe(200)
+    const closed = await (await call('/api/denials?status=closed')).json()
+    const rows: { id: number; status: string }[] = []
+    for (let p = 1; p <= Math.ceil(closed.total / closed.pageSize); p++) rows.push(...(await (await call(`/api/denials?status=closed&page=${p}`)).json()).rows)
+    expect(rows.map((r) => r.id)).toContain(id)
+    expect(new Set(rows.map((r) => r.status))).toEqual(new Set(['resolved', 'written_off']))
+  })
+
+  it('rejects an unknown status filter with 400', async () => {
+    expect((await call('/api/denials?status=bogus')).status).toBe(400)
+  })
+
+  it('pages through ties without repeating or skipping rows', async () => {
+    // 80 denials with the same amount, denial date and deadline: only the id can order them
+    const claims = Array.from({ length: 80 }, (_, i) => ({ pcn: `TESTTIE${String(i).padStart(3, '0')}`, status: '4', charge: 100, paid: 0, cas: ['CO*16*100'] }))
+    await upload('/api/import/837', claim837('TIE1', claims.map((c) => ({ pcn: c.pcn, payerId: 'AAA01', payerName: 'ALPHA PLAN', lines: [{ code: '99213', charge: 100 }] }))))
+    expect((await (await upload('/api/import/835', remit835({ payerId: 'AAA01', payerName: 'ALPHA PLAN', trace: 'TTIE1', claims }))).json()).newDenials).toBe(80)
+    for (const sort of ['amount', 'due', 'age']) {
+      const ids: number[] = []
+      for (let p = 1; p <= 4; p++) ids.push(...(await (await call(`/api/denials?q=TESTTIE&sort=${sort}&page=${p}`)).json()).rows.map((r: { id: number }) => r.id))
+      expect(ids).toEqual([...ids].sort((a, b) => a - b))
+      expect(new Set(ids).size).toBe(80)
+    }
   })
 })

@@ -46,7 +46,7 @@ const VIEWS = [
   { key: 'mine', label: 'Mine', q: { status: 'open', owner: 'me' } },
   { key: 'unassigned', label: 'Unassigned', q: { status: 'open', owner: 'none' } },
   { key: 'waiting', label: 'Waiting on payer', q: { status: 'resubmitted' } },
-  { key: 'closed', label: 'Closed', q: { status: 'resolved' } },
+  { key: 'closed', label: 'Closed', q: { status: 'closed' } },
 ] as const
 
 export default function Worklist({ selected }: { selected?: number }) {

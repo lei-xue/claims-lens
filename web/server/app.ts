@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { getDb } from './db'
 import { login, logout, SESSION_DAYS, userForToken, type PublicUser } from './services/auth'
 import { import835, import837, ImportError } from './services/imports'
-import { analytics, denialDetail, kpis, lookups, remittanceList, remittanceRaw, worklist } from './services/queries'
+import { analytics, denialDetail, kpis, lookups, remittanceList, remittanceRaw, STATUS_FILTERS, worklist } from './services/queries'
 import { addNote, assign, correctedClaim, draftAppeal, setStatus, WorkflowError } from './services/workflow'
 
 type Env = { Variables: { user: PublicUser } }
@@ -70,7 +70,7 @@ app.get('/lookups', async (c) => c.json(await lookups(getDb())))
 app.get('/analytics', async (c) => c.json(await analytics(getDb())))
 
 const listQuery = z.object({
-  status: z.string().optional(),
+  status: z.enum(STATUS_FILTERS).optional(),
   payer: z.coerce.number().int().optional(),
   category: z.string().max(60).optional(),
   owner: z.union([z.literal('me'), z.literal('none'), z.coerce.number().int()]).optional(),

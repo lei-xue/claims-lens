@@ -5,9 +5,12 @@ import { CARC } from './codes'
 
 const { denials, claims, claimLines, claimPayments, linePayments, adjustments, payers, users, activities, remittances, appeals } = schema
 const OPEN = ['new', 'in_progress', 'resubmitted', 'appealed'] as const
+const CLOSED = ['resolved', 'written_off'] as const
+/** worklist ?status values: a single status, or a group */
+export const STATUS_FILTERS = ['open', 'closed', 'all', ...OPEN, ...CLOSED] as const
 
 export type WorklistFilter = {
-  status?: string
+  status?: (typeof STATUS_FILTERS)[number]
   payer?: number
   category?: string
   owner?: number | 'me' | 'none'
@@ -18,11 +21,14 @@ export type WorklistFilter = {
 }
 
 const ageExpr = sql<number>`(current_date - ${denials.deniedOn})`
+// a denial whose 837 is not on file yet still has the patient control number from its 835
+const pcnExpr = sql<string>`coalesce(${claims.patientControl}, ${claimPayments.patientControl})`
 
 export async function worklist(db: Db, f: WorklistFilter, me: number) {
   const where: SQL[] = []
   if (f.status === 'open' || !f.status) where.push(inArray(denials.status, [...OPEN]))
-  else if (f.status !== 'all') where.push(eq(denials.status, f.status as (typeof OPEN)[number]))
+  else if (f.status === 'closed') where.push(inArray(denials.status, [...CLOSED]))
+  else if (f.status !== 'all') where.push(eq(denials.status, f.status))
   if (f.payer) where.push(eq(denials.payerId, f.payer))
   if (f.category) where.push(eq(denials.category, f.category))
   if (f.owner === 'me') where.push(eq(denials.ownerId, me))
@@ -34,10 +40,10 @@ export async function worklist(db: Db, f: WorklistFilter, me: number) {
   }
   if (f.q) {
     const like = `%${f.q.trim()}%`
-    where.push(or(ilike(claims.patientControl, like), ilike(claims.patientName, like), ilike(denials.primaryCode, like))!)
+    where.push(or(ilike(pcnExpr, like), ilike(claims.patientName, like), ilike(denials.primaryCode, like))!)
   }
-  // default: soonest appeal deadline first, so overdue work is always on top
-  const order = f.sort === 'amount' ? [desc(denials.amount)] : f.sort === 'age' ? [desc(ageExpr), desc(denials.amount)] : [asc(denials.appealBy), desc(denials.amount)]
+  // default: soonest appeal deadline first, so overdue work is always on top; id breaks ties so pages are stable
+  const order = [...(f.sort === 'amount' ? [desc(denials.amount)] : f.sort === 'age' ? [desc(ageExpr), desc(denials.amount)] : [asc(denials.appealBy), desc(denials.amount)]), asc(denials.id)]
   const pageSize = 25
   const page = Math.max(1, f.page ?? 1)
   const cond = where.length ? and(...where) : undefined
@@ -45,11 +51,12 @@ export async function worklist(db: Db, f: WorklistFilter, me: number) {
     .select({
       id: denials.id, status: denials.status, primaryCode: denials.primaryCode, codes: denials.codes, category: denials.category,
       amount: denials.amount, recovered: denials.recovered, deniedOn: denials.deniedOn, appealBy: denials.appealBy, age: ageExpr,
-      fullDenial: denials.fullDenial, patientControl: claims.patientControl, patient: claims.patientName, serviceDate: claims.serviceDate,
+      fullDenial: denials.fullDenial, patientControl: pcnExpr, patient: claims.patientName, serviceDate: claims.serviceDate,
       payer: payers.name, payerId: payers.id, ownerId: users.id, owner: users.name,
     })
     .from(denials)
     .leftJoin(claims, eq(claims.id, denials.claimId))
+    .leftJoin(claimPayments, eq(claimPayments.id, denials.claimPaymentId))
     .leftJoin(payers, eq(payers.id, denials.payerId))
     .leftJoin(users, eq(users.id, denials.ownerId))
     .where(cond)
@@ -60,6 +67,7 @@ export async function worklist(db: Db, f: WorklistFilter, me: number) {
     .select({ total: count(), amount: sum(denials.amount) })
     .from(denials)
     .leftJoin(claims, eq(claims.id, denials.claimId))
+    .leftJoin(claimPayments, eq(claimPayments.id, denials.claimPaymentId))
     .where(cond)
   return { rows: rows.map((r) => ({ ...r, title: CARC.get(r.primaryCode.split('-')[1])?.title ?? '' })), total, amount: Number(amount ?? 0), page, pageSize }
 }
