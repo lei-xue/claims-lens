@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api, money, shortDate, useApi } from '../lib/api'
 import { sample } from '../lib/generate'
+import { transactionType } from '../lib/interpret'
 import { titleCase } from './Worklist'
 
 type Remit = { id: number; trace: string; payer: string; amount: number; date: string; method: string; importedAt: string; fileName: string | null; claims: number; unmatched: number; denials: number; issues: { level: string; message: string }[] }
@@ -16,7 +17,9 @@ export default function Remittances() {
   const upload = async (text: string, name?: string) => {
     setBusy(true)
     setMsg(null)
-    const kind = /ST\*835/.test(text) ? '835' : /ST\*837/.test(text) ? '837' : null
+    // ST01 read with the file's own delimiters (not every sender uses *)
+    const st = transactionType(text)
+    const kind = st === '835' || st === '837' ? st : null
     try {
       if (!kind) throw new Error('This isn’t an 835 payment file or an 837 claim file.')
       if (kind === '835') {
