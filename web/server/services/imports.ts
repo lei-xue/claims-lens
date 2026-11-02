@@ -136,10 +136,15 @@ async function importRemit(tx: Tx, doc: Remit, issues: { level: string; message:
         charge: c.charge, paid: c.paid, patientResp: c.patientResp, payerClaimId: c.payerClaim, remarks: c.remarks,
       })
       .returning()
+    // a reversal (CLP02 22) or a negative adjustment backs out an earlier adjudication: it is not new work
+    const reversal = c.status === '22'
+    const isWork = (a: { group: string; reason: string; amount: number }) => !reversal && a.amount > 0 && isDenial(a.group, a.reason)
     const denialAdj: { group: string; reason: string; amount: number }[] = []
+    const allAdj: { group: string; reason: string; amount: number }[] = []
     for (const a of c.adjustments) {
       await tx.insert(adjustments).values({ claimPaymentId: cp.id, groupCode: a.group, reason: a.reason, amount: a.amount })
-      if (isDenial(a.group, a.reason)) denialAdj.push(a)
+      allAdj.push(a)
+      if (isWork(a)) denialAdj.push(a)
     }
     const used = new Set<number>()
     for (const s of c.services) {
@@ -154,7 +159,8 @@ async function importRemit(tx: Tx, doc: Remit, issues: { level: string; message:
         .returning()
       for (const a of s.adjustments) {
         await tx.insert(adjustments).values({ claimPaymentId: cp.id, linePaymentId: lp.id, groupCode: a.group, reason: a.reason, amount: a.amount })
-        if (isDenial(a.group, a.reason)) denialAdj.push(a)
+        allAdj.push(a)
+        if (isWork(a)) denialAdj.push(a)
       }
     }
     await tx.insert(activities).values({
@@ -169,16 +175,24 @@ async function importRemit(tx: Tx, doc: Remit, issues: { level: string; message:
       : []
     if (open.length) {
       const d = open[0]
-      // only a remittance with no denial adjustments left closes the work item
-      if (!denialAdj.length) {
+      const code = (a: { group: string; reason: string }) => `${a.group}-${a.reason}`
+      if (reversal) {
+        // the payer took back an earlier payment; the next CLP for the claim says what happens now
+        await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'note', body: { text: `Payer reversed an earlier adjudication on ${deniedOn}${c.paid ? ` ($${c.paid.toFixed(2)})` : ''}.`, auto: true } })
+      } else if (['1', '2', '3'].includes(c.status) && c.paid > 0 && !denialAdj.length) {
+        // processed and paid with no denial adjustments left: the work item is done
         const recovered = r2(d.recovered + c.paid)
         await tx.update(denials).set({ status: 'resolved', recovered, resolvedAt: new Date(), updatedAt: new Date() }).where(eq(denials.id, d.id))
         await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'status', body: { from: d.status, to: 'resolved', recovered: c.paid, auto: true } })
         result.resolved++
       } else {
-        // a partial payment still counts toward what was recovered
-        await tx.update(denials).set({ status: 'in_progress', recovered: r2(d.recovered + c.paid), updatedAt: new Date() }).where(eq(denials.id, d.id))
-        await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'note', body: { text: `Denied again on ${deniedOn} (${denialAdj.map((a) => `${a.group}-${a.reason}`).join(', ')})${c.paid > 0 ? `; $${c.paid.toFixed(2)} paid` : ''}.`, auto: true } })
+        // denied again (CLP02 4 or a new denial adjustment), or processed with nothing paid: still open.
+        // A partial payment still counts toward what was recovered.
+        const shown = denialAdj.length ? denialAdj : allAdj.filter((a) => a.amount > 0)
+        const codes = c.status === '4' || denialAdj.length ? [...new Set([...d.codes, ...shown.map(code)])] : d.codes
+        await tx.update(denials).set({ status: 'in_progress', codes, recovered: r2(d.recovered + Math.max(c.paid, 0)), updatedAt: new Date() }).where(eq(denials.id, d.id))
+        const what = c.status === '4' || denialAdj.length ? 'Denied again' : 'Processed with no payment'
+        await tx.insert(activities).values({ denialId: d.id, claimId: claim!.id, userId, kind: 'note', body: { text: `${what} on ${deniedOn}${shown.length ? ` (${shown.map(code).join(', ')})` : ''}${c.paid > 0 ? `; $${c.paid.toFixed(2)} paid` : ''}.`, auto: true } })
       }
       continue
     }

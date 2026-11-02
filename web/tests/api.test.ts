@@ -180,3 +180,41 @@ describe('remittance files with several transactions', () => {
     expect((await upload('/api/import/835', text)).status).toBe(409)
   })
 })
+
+describe('closing the loop on later remittances', () => {
+  const payer = { payerId: 'AAA01', payerName: 'ALPHA PLAN' }
+  const denialOf = async (pcn: string) => {
+    const { denials, claimPayments } = schema
+    return getDb().select({ id: denials.id, status: denials.status, recovered: denials.recovered, amount: denials.amount, claimId: denials.claimId, codes: denials.codes }).from(denials).innerJoin(claimPayments, eq(claimPayments.id, denials.claimPaymentId)).where(eq(claimPayments.patientControl, pcn)).orderBy(denials.id)
+  }
+
+  it('does not auto-resolve on a re-denial or a reversal, only on a real payment', async () => {
+    const pcn = 'TESTLOOP1'
+    await upload('/api/import/837', claim837('LOOP1', [{ pcn, ...payer, lines: [{ code: '99214', charge: 200 }] }]))
+    const r1 = await (await upload('/api/import/835', remit835({ ...payer, trace: 'TLOOP1', claims: [{ pcn, status: '4', charge: 200, paid: 0, cas: ['CO*16*200'] }] }))).json()
+    expect(r1.newDenials).toBe(1)
+    // re-denied, this time as patient responsibility (not a "denial" adjustment by group)
+    const r2 = await (await upload('/api/import/835', remit835({ ...payer, trace: 'TLOOP2', claims: [{ pcn, status: '4', charge: 200, paid: 0, pr: 200, cas: ['PR*204*200'] }] }))).json()
+    expect(r2).toMatchObject({ resolved: 0, newDenials: 0 })
+    let [d] = await denialOf(pcn)
+    expect(d).toMatchObject({ status: 'in_progress', recovered: 0 })
+    expect(d.codes).toEqual(['CO-16', 'PR-204'])
+    // a reversal of an earlier payment (negative paid) neither resolves nor counts as recovered
+    const r3 = await (await upload('/api/import/835', remit835({ ...payer, trace: 'TLOOP3', claims: [{ pcn, status: '22', charge: -200, paid: -80, cas: ['CO*45*-120'] }] }))).json()
+    expect(r3).toMatchObject({ resolved: 0, newDenials: 0 })
+    ;[d] = await denialOf(pcn)
+    expect(d).toMatchObject({ status: 'in_progress', recovered: 0 })
+    // processed and paid: resolves
+    const r4 = await (await upload('/api/import/835', remit835({ ...payer, trace: 'TLOOP4', claims: [{ pcn, status: '1', charge: 200, paid: 80, cas: ['CO*45*120'] }] }))).json()
+    expect(r4.resolved).toBe(1)
+    expect(await denialOf(pcn)).toMatchObject([{ status: 'resolved', recovered: 80 }])
+  })
+
+  it('does not open a work item for a reversal with negative denial adjustments', async () => {
+    const pcn = 'TESTREV1'
+    await upload('/api/import/837', claim837('REV1', [{ pcn, ...payer, lines: [{ code: '99214', charge: 200 }] }]))
+    const res = await (await upload('/api/import/835', remit835({ ...payer, trace: 'TREV1', claims: [{ pcn, status: '22', charge: -200, paid: -80, cas: ['CO*50*-120'] }] }))).json()
+    expect(res.newDenials).toBe(0)
+    expect(await denialOf(pcn)).toEqual([])
+  })
+})
