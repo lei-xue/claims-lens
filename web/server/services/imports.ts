@@ -15,6 +15,11 @@ export class ImportError extends Error {
 
 const isoDate = (ccyymmdd: string) => `${ccyymmdd.slice(0, 4)}-${ccyymmdd.slice(4, 6)}-${ccyymmdd.slice(6, 8)}`
 const r2 = (n: number) => Math.round(n * 100) / 100
+/** SV104 service units: may be fractional (stored to 3 decimals); missing or nonsense means 1 */
+const unitsOf = (v: string) => {
+  const n = Math.round(Number(v) * 1000) / 1000
+  return n > 0 && n < 1e7 ? n : 1
+}
 
 async function upsertPayer(tx: Tx, code: string, name: string) {
   const key = code || name
@@ -58,7 +63,7 @@ export async function import837(db: Db, text: string, userId: number | null): Pr
       const lines = await tx.insert(claimLines).values(
         c.lines.map((l, n) => ({
           claimId: row.id, lineNo: n + 1, procedure: l.procedure, modifiers: l.modifiers, charge: l.charge,
-          units: Number(l.units) || 1, dxPointers: l.pointers.map(Number),
+          units: unitsOf(l.units), dxPointers: l.pointers.map(Number),
         })),
       ).returning()
       await tx.insert(activities).values({ claimId: row.id, userId, kind: c.frequency === '7' ? 'resubmitted' : 'submitted', body: { charge: c.charge } })

@@ -276,3 +276,15 @@ describe('claims already on file', () => {
     expect(rows.map((r) => r.f).sort()).toEqual(['1', '7', '7'])
   })
 })
+
+describe('837 service units', () => {
+  it('imports fractional SV104 units instead of failing', async () => {
+    const pcn = 'TESTUNITS1'
+    const res = await upload('/api/import/837', claim837('UN1', [{ pcn, payerId: 'AAA01', payerName: 'ALPHA PLAN', lines: [{ code: '97110', charge: 90, units: '1.5' }, { code: '99213', charge: 120, units: '' }] }]))
+    expect(res.status).toBe(200)
+    expect((await res.json()).claims).toBe(1)
+    const { claims, claimLines } = schema
+    const rows = await getDb().select({ units: claimLines.units }).from(claimLines).innerJoin(claims, eq(claims.id, claimLines.claimId)).where(eq(claims.patientControl, pcn)).orderBy(claimLines.lineNo)
+    expect(rows.map((r) => r.units)).toEqual([1.5, 1])
+  })
+})

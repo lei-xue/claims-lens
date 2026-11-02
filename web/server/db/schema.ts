@@ -60,7 +60,7 @@ export const claimLines = pgTable('claim_lines', {
   procedure: text('procedure').notNull(),
   modifiers: text('modifiers').array().notNull().default(sql`'{}'`),
   charge: money('charge').notNull(),
-  units: integer('units').notNull().default(1),
+  units: numeric('units', { precision: 10, scale: 3, mode: 'number' }).notNull().default(1), // SV104 can be fractional (e.g. 1.5)
   dxPointers: integer('dx_pointers').array().notNull().default(sql`'{}'`),
 })
 
