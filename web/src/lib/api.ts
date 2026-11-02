@@ -55,6 +55,12 @@ export const money = (n: number | null | undefined) =>
   n === null || n === undefined ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 export const money0 = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 export const shortDate = (iso: string) => new Date(iso.length === 10 ? iso + 'T12:00:00' : iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+/** Whole calendar days from today (local) to an ISO date: tomorrow is 1, yesterday −1, whatever the time of day. */
+export function daysUntil(iso: string, now = new Date()) {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((new Date(y, m - 1, d).getTime() - today.getTime()) / 86400000)
+}
 export const initials = (name?: string | null) => (name ?? '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
 export function download(name: string, text: string, type = 'text/plain') {

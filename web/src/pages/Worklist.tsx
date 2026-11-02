@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AdjChip, RemarkChip, useOpenCode } from '../components/CodeDrawer'
-import { api, download, initials, money, money0, shortDate, useApi, useAuth } from '../lib/api'
+import { api, daysUntil, download, initials, money, money0, shortDate, useApi, useAuth } from '../lib/api'
 import { PROCEDURES } from '../lib/generate'
 
 type Row = {
@@ -32,7 +32,6 @@ export const STATUS_LABEL: Record<Status, string> = {
 }
 export const StatusPill = ({ s }: { s: Status }) => <span className={`status ${s}`}>{STATUS_LABEL[s]}</span>
 
-const daysUntil = (iso: string) => Math.ceil((Date.parse(iso + 'T12:00:00') - Date.now()) / 86400000)
 function Due({ iso, closed }: { iso: string; closed?: boolean }) {
   if (closed) return <span className="due ok">—</span>
   const d = daysUntil(iso)
